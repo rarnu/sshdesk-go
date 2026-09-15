@@ -19,6 +19,7 @@ import (
 	"github.com/rarnu/sshdesk-go/internal/render"
 	"github.com/rarnu/sshdesk-go/internal/render/ansi"
 	"github.com/rarnu/sshdesk-go/internal/session"
+	"github.com/rarnu/sshdesk-go/internal/setup"
 )
 
 func main() {
@@ -68,6 +69,10 @@ func dispatch(argv []string) int {
 			return client.SplitMain(args[1:])
 		case "bench":
 			return bench.Main(args[1:])
+		case "install", "--install":
+			return setup.InstallMain(args[1:], os.Stdout, os.Stderr)
+		case "uninstall", "--uninstall":
+			return setup.UninstallMain(args[1:], os.Stdout, os.Stderr)
 		}
 	}
 	return serverMain(args)
