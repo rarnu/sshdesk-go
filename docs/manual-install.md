@@ -116,6 +116,11 @@ XDG_CURRENT_DESKTOP=GNOME
 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
 ```
 
+> 内置安装器会自动从目标用户的活跃图形会话（/proc 中属于该 uid 的
+> 合成器/会话进程环境）采集这些变量，普通 `sudo sshdesk --install`
+> 即可，无需 `sudo --preserve-env=...`；显式 `--display/--xauthority`
+> 参数 > 进程环境 > 会话采集 > 默认值。
+
 ## 4. 验证后端可用性
 
 以桌面用户身份、在图形会话环境中运行：

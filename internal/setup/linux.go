@@ -81,19 +81,46 @@ func linuxInstall(d Deps, opts InstallOptions, p linuxPaths) int {
 		return 1
 	}
 
+	// Graphical session variables resolve in priority order: explicit flag,
+	// the installer's own process environment, the environment harvested from
+	// the account's running graphical session, then the historical defaults.
+	var harvested map[string]string
+	if d.HarvestSession != nil {
+		harvested = d.HarvestSession(uid)
+	}
+	envValue := func(key string) string {
+		if value := d.Getenv(key); value != "" {
+			return value
+		}
+		return harvested[key]
+	}
+	if harvested["WAYLAND_DISPLAY"] != "" ||
+		strings.EqualFold(harvested["XDG_SESSION_TYPE"], "wayland") {
+		desktop := harvested["XDG_CURRENT_DESKTOP"]
+		if desktop == "" {
+			desktop = "unknown desktop"
+		}
+		sessionType := harvested["XDG_SESSION_TYPE"]
+		if sessionType == "" || strings.EqualFold(sessionType, "wayland") {
+			sessionType = "Wayland"
+		}
+		d.say(fmt.Sprintf("Detected a %s %s session for user %s; recorded its graphical environment.",
+			desktop, sessionType, account))
+	}
+
 	display := opts.Display
 	if display == "" {
-		display = d.Getenv("DISPLAY")
+		display = envValue("DISPLAY")
 	}
-	if display == "" && d.Getenv("WAYLAND_DISPLAY") == "" {
+	if display == "" && envValue("WAYLAND_DISPLAY") == "" {
 		display = ":0"
 	}
 	xauthority := opts.XAuthority
 	if xauthority == "" {
-		xauthority = d.Getenv("XAUTHORITY")
+		xauthority = envValue("XAUTHORITY")
 	}
 	if xauthority == "" {
-		runtimeDir := d.Getenv("XDG_RUNTIME_DIR")
+		runtimeDir := envValue("XDG_RUNTIME_DIR")
 		gdm := filepath.Join(runtimeDir, "gdm", "Xauthority")
 		if runtimeDir != "" && fileExists(gdm) {
 			xauthority = gdm
@@ -106,7 +133,7 @@ func linuxInstall(d Deps, opts InstallOptions, p linuxPaths) int {
 		return 2
 	}
 	for _, key := range waylandKeys {
-		if strings.ContainsAny(d.Getenv(key), "\r\n") {
+		if strings.ContainsAny(envValue(key), "\r\n") {
 			d.errf("desktop session variables must not contain newlines")
 			return 2
 		}
@@ -148,7 +175,7 @@ command; missing capture or input tools are reported at the end.`,
 				return err
 			}
 			return writeFileOwned(d, p.accountConfig(account),
-				RenderConfig(display, xauthority, runAs, d.Getenv), 0o644, 0, 0)
+				RenderConfig(display, xauthority, runAs, envValue), 0o644, 0, 0)
 		}},
 		{"write-sudoers", func() error {
 			if err := os.MkdirAll(p.sudoersDir, 0o755); err != nil {
@@ -187,16 +214,16 @@ command; missing capture or input tools are reported at the end.`,
 		}},
 		{"reload-openssh", func() error { return reloadOpenSSH(d) }},
 		{"setup-ydotoold", func() error {
-			return setupYdotoold(d, account, uid, gid, p)
+			return setupYdotoold(d, account, uid, gid, p, envValue)
 		}},
 		{"check-dependencies", func() error {
-			warnMissingDependencies(d)
+			warnMissingDependencies(d, envValue)
 			return nil
 		}},
 		{"verify-access", func() error {
 			args := []string{"-n", "-u", runAs, "env",
 				"DISPLAY=" + display, "XAUTHORITY=" + xauthority}
-			args = append(args, sessionEnv(d.Getenv)...)
+			args = append(args, sessionEnv(envValue)...)
 			args = append(args, p.binPath(), "server", "--check")
 			if err := d.Run("sudo", args...); err != nil {
 				d.say(fmt.Sprintf("warning: the desktop access check as %s failed; verify DISPLAY and XAUTHORITY before connecting", runAs))
@@ -486,9 +513,10 @@ func reloadOpenSSH(d Deps) error {
 
 // setupYdotoold configures the sandboxed ydotoold service for non-GNOME
 // Wayland sessions. Missing helper binaries or systemd produce a warning with
-// package suggestions instead of a failure; nothing is downloaded.
-func setupYdotoold(d Deps, account string, uid, gid int, p linuxPaths) error {
-	family := waylandFamily(d.Getenv)
+// package suggestions instead of a failure; nothing is downloaded. getenv
+// resolves session variables (process environment plus harvested values).
+func setupYdotoold(d Deps, account string, uid, gid int, p linuxPaths, getenv func(string) string) error {
+	family := waylandFamily(getenv)
 	if family == "" || family == "gnome" {
 		return nil
 	}
@@ -549,9 +577,10 @@ func setupYdotoold(d Deps, account string, uid, gid int, p linuxPaths) error {
 }
 
 // warnMissingDependencies reports missing capture or streaming tools for the
-// current session type. Warnings only; the install still succeeds.
-func warnMissingDependencies(d Deps) {
-	family := waylandFamily(d.Getenv)
+// current session type. Warnings only; the install still succeeds. getenv
+// resolves session variables (process environment plus harvested values).
+func warnMissingDependencies(d Deps, getenv func(string) string) {
+	family := waylandFamily(getenv)
 	missing := func(executable string) bool {
 		_, err := d.LookPath(executable)
 		return err != nil

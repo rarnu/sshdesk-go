@@ -87,6 +87,9 @@ type Deps struct {
 	Run         func(name string, args ...string) error
 	Chown       func(name string, uid, gid int) error
 	Confirm     func(plan string) bool
+	// HarvestSession, when set, collects graphical-session variables from the
+	// target account's running processes (Linux /proc); nil elsewhere.
+	HarvestSession func(uid int) map[string]string
 	// OnStep, when set, is called with each step name before it runs.
 	OnStep func(name string)
 }

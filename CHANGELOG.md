@@ -32,6 +32,20 @@
 
 ### Added
 
+- Linux install now harvests the graphical session environment from the
+  target account's active session: `sshdesk --install` scans `/proc` for
+  processes owned by the desktop uid (compositor processes such as
+  gnome-shell, plasmashell, sway, Hyprland, weston, wayfire, labwc, river,
+  and kwin_wayland preferred) and records `WAYLAND_DISPLAY`,
+  `XDG_RUNTIME_DIR`, `XDG_SESSION_TYPE`, `XDG_CURRENT_DESKTOP`,
+  `DBUS_SESSION_BUS_ADDRESS`, `DISPLAY`, and `XAUTHORITY` from their
+  environment. Plain `sudo sshdesk --install` therefore writes a complete
+  Wayland configuration without `sudo --preserve-env=...`; the resolution
+  order is explicit flag > process environment > /proc harvest > defaults.
+  The ydotoold setup and dependency health check use the harvested values
+  for the GNOME/KDE/wlroots family decision, and a detected session is
+  announced with one output line.
+
 - Built-in cross-platform installer: `sshdesk --install` and
   `sshdesk --uninstall` (also available as the `install`/`uninstall`
   subcommands). The Linux flow (root-only) installs the binary and eight

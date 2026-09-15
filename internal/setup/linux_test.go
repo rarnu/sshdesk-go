@@ -383,3 +383,156 @@ func TestLinuxInstallWarnsAboutMissingCaptureTools(t *testing.T) {
 		t.Errorf("expected an apt suggestion:\n%s", f.stdout.String())
 	}
 }
+
+// configValues parses KEY=VALUE lines from an account config.
+func configValues(t *testing.T, content string) map[string]string {
+	t.Helper()
+	values := map[string]string{}
+	for _, line := range strings.Split(strings.TrimRight(content, "\n"), "\n") {
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			t.Fatalf("malformed config line: %q", line)
+		}
+		values[key] = value
+	}
+	return values
+}
+
+func TestLinuxInstallHarvestsGraphicalSession(t *testing.T) {
+	f := newLinuxFixture(t)
+	// Plain sudo without --preserve-env: the process carries no session
+	// variables, so everything graphical must come from the /proc harvest.
+	f.deps.Getenv = envMap("USER", "alice")
+	gotUID := -1
+	f.deps.HarvestSession = func(uid int) map[string]string {
+		gotUID = uid
+		return map[string]string{
+			"WAYLAND_DISPLAY":          "wayland-0",
+			"XDG_RUNTIME_DIR":          "/run/user/1000",
+			"XDG_SESSION_TYPE":         "wayland",
+			"XDG_CURRENT_DESKTOP":      "GNOME",
+			"DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/1000/bus",
+		}
+	}
+	code := linuxInstall(f.deps, InstallOptions{User: "alice", Yes: true}, f.paths)
+	if code != 0 {
+		t.Fatalf("install exit = %d\noutput:\n%s", code, f.stdout.String())
+	}
+	if gotUID != 1000 {
+		t.Errorf("HarvestSession uid = %d, want 1000", gotUID)
+	}
+	values := configValues(t, f.read(t, f.paths.accountConfig("alice")))
+	for key, want := range map[string]string{
+		"WAYLAND_DISPLAY":          "wayland-0",
+		"XDG_RUNTIME_DIR":          "/run/user/1000",
+		"XDG_SESSION_TYPE":         "wayland",
+		"XDG_CURRENT_DESKTOP":      "GNOME",
+		"DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/1000/bus",
+		"RUN_AS":                   "alice",
+	} {
+		if values[key] != want {
+			t.Errorf("config %s = %q, want %q", key, values[key], want)
+		}
+	}
+	if !strings.Contains(f.stdout.String(),
+		"Detected a GNOME Wayland session for user alice") {
+		t.Errorf("missing detection note:\n%s", f.stdout.String())
+	}
+	// The session family comes from the harvest: GNOME triggers the PipeWire
+	// dependency note, not the ffmpeg one.
+	if !strings.Contains(f.stdout.String(), "GNOME PipeWire capture needs") {
+		t.Errorf("expected the GNOME dependency note:\n%s", f.stdout.String())
+	}
+	// The harvested environment reaches the desktop access check.
+	joined := strings.Join(f.runs, "\n")
+	if !strings.Contains(joined, "sudo -n -u alice env DISPLAY= XAUTHORITY=/home/alice/.Xauthority WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/run/user/1000") {
+		t.Errorf("verify-access missed the harvested environment:\n%s", joined)
+	}
+}
+
+func TestLinuxInstallSessionVariablePriority(t *testing.T) {
+	waylandHarvest := map[string]string{
+		"WAYLAND_DISPLAY":     "wayland-0",
+		"XDG_RUNTIME_DIR":     "/run/user/1000",
+		"XDG_SESSION_TYPE":    "wayland",
+		"XDG_CURRENT_DESKTOP": "sway",
+	}
+	tests := []struct {
+		name           string
+		display        string
+		xauthority     string
+		env            func(string) string
+		harvest        map[string]string
+		wantDisplay    string
+		wantXauthority string
+	}{
+		{"flag beats env and harvest", ":9", "/tmp/flag-auth",
+			envMap("USER", "alice", "DISPLAY", ":1", "XAUTHORITY", "/tmp/env-auth"),
+			map[string]string{"DISPLAY": ":2", "XAUTHORITY": "/tmp/harvest-auth"},
+			":9", "/tmp/flag-auth"},
+		{"env beats harvest", "", "",
+			envMap("USER", "alice", "DISPLAY", ":1", "XAUTHORITY", "/tmp/env-auth"),
+			map[string]string{"DISPLAY": ":2", "XAUTHORITY": "/tmp/harvest-auth"},
+			":1", "/tmp/env-auth"},
+		{"harvest beats defaults", "", "",
+			envMap("USER", "alice"),
+			map[string]string{"DISPLAY": ":2", "XAUTHORITY": "/tmp/harvest-auth"},
+			":2", "/tmp/harvest-auth"},
+		{"wayland harvest suppresses the :0 default", "", "",
+			envMap("USER", "alice"), waylandHarvest, "", "/home/alice/.Xauthority"},
+		{"defaults without any session", "", "",
+			envMap("USER", "alice"), nil, ":0", "/home/alice/.Xauthority"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			f := newLinuxFixture(t)
+			f.deps.Getenv = test.env
+			if test.harvest != nil {
+				f.deps.HarvestSession = func(int) map[string]string {
+					return test.harvest
+				}
+			}
+			opts := InstallOptions{User: "alice", Yes: true,
+				Display: test.display, XAuthority: test.xauthority}
+			if code := linuxInstall(f.deps, opts, f.paths); code != 0 {
+				t.Fatalf("install exit = %d\noutput:\n%s", code, f.stdout.String())
+			}
+			values := configValues(t, f.read(t, f.paths.accountConfig("alice")))
+			if values["DISPLAY"] != test.wantDisplay {
+				t.Errorf("DISPLAY = %q, want %q", values["DISPLAY"], test.wantDisplay)
+			}
+			if values["XAUTHORITY"] != test.wantXauthority {
+				t.Errorf("XAUTHORITY = %q, want %q", values["XAUTHORITY"], test.wantXauthority)
+			}
+		})
+	}
+}
+
+func TestLinuxInstallHarvestedKDETriggersYdotooldNote(t *testing.T) {
+	f := newLinuxFixture(t)
+	f.deps.Getenv = envMap("USER", "alice")
+	f.deps.HarvestSession = func(int) map[string]string {
+		return map[string]string{
+			"WAYLAND_DISPLAY":     "wayland-0",
+			"XDG_RUNTIME_DIR":     "/run/user/1000",
+			"XDG_SESSION_TYPE":    "wayland",
+			"XDG_CURRENT_DESKTOP": "KDE",
+		}
+	}
+	code := linuxInstall(f.deps, InstallOptions{User: "alice", Yes: true}, f.paths)
+	if code != 0 {
+		t.Fatalf("install exit = %d\noutput:\n%s", code, f.stdout.String())
+	}
+	output := f.stdout.String()
+	// KDE is a ydotool family: the helper note and the capture suggestion
+	// prove the family decision used the harvested session.
+	if !strings.Contains(output, "ydotool") {
+		t.Errorf("expected the ydotool helper note:\n%s", output)
+	}
+	if !strings.Contains(output, "spectacle not found") {
+		t.Errorf("expected the KDE capture note:\n%s", output)
+	}
+	if !strings.Contains(output, "Detected a KDE Wayland session for user alice") {
+		t.Errorf("missing detection note:\n%s", output)
+	}
+}
