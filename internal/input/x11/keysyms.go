@@ -3,7 +3,7 @@
 // so they can be tested without an X server; the X wiring is Linux-only.
 package x11
 
-import "github.com/rylena/sshdesk-go/internal/input"
+import "github.com/rarnu/sshdesk-go/internal/input"
 
 // Keysym values from X11 keysymdef.h.
 const (

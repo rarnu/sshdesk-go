@@ -8,7 +8,7 @@ import (
 	"math"
 	"unicode/utf16"
 
-	"github.com/rylena/sshdesk-go/internal/input"
+	"github.com/rarnu/sshdesk-go/internal/input"
 )
 
 const (

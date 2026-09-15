@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rylena/sshdesk-go/internal/render"
+	"github.com/rarnu/sshdesk-go/internal/render"
 )
 
 func TestBenchOutputFormat(t *testing.T) {

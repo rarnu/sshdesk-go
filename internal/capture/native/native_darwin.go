@@ -15,7 +15,7 @@ import (
 	"image"
 	"unsafe"
 
-	"github.com/rylena/sshdesk-go/internal/capture/xshm"
+	"github.com/rarnu/sshdesk-go/internal/capture/xshm"
 )
 
 // grabDisplay captures the main display through Quartz and scales it to the

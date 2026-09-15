@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rylena/sshdesk-go/internal/input"
+	"github.com/rarnu/sshdesk-go/internal/input"
 )
 
 func TestSpecialKeysTable(t *testing.T) {

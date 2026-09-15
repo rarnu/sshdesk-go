@@ -8,8 +8,8 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/rylena/sshdesk-go/internal/capture"
-	"github.com/rylena/sshdesk-go/internal/render"
+	"github.com/rarnu/sshdesk-go/internal/capture"
+	"github.com/rarnu/sshdesk-go/internal/render"
 )
 
 var kittyCommandRE = regexp.MustCompile(`\x1b_G([^;]+);([^\x1b]*)\x1b\\`)

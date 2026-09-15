@@ -3,10 +3,10 @@
 package agent
 
 import (
-	"github.com/rylena/sshdesk-go/internal/capture"
-	"github.com/rylena/sshdesk-go/internal/capture/native"
-	"github.com/rylena/sshdesk-go/internal/input"
-	"github.com/rylena/sshdesk-go/internal/input/sendinput"
+	"github.com/rarnu/sshdesk-go/internal/capture"
+	"github.com/rarnu/sshdesk-go/internal/capture/native"
+	"github.com/rarnu/sshdesk-go/internal/input"
+	"github.com/rarnu/sshdesk-go/internal/input/sendinput"
 )
 
 // defaultFactories resolves the Windows platform backends: BitBlt capture

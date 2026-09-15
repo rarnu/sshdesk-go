@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/rylena/sshdesk-go/internal/input"
+	"github.com/rarnu/sshdesk-go/internal/input"
 )
 
 // recordedCall is one captured D-Bus call.

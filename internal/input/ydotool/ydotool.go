@@ -16,7 +16,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/rylena/sshdesk-go/internal/input"
+	"github.com/rarnu/sshdesk-go/internal/input"
 )
 
 // runTimeout mirrors the Python subprocess timeout.

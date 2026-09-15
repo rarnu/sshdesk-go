@@ -3,9 +3,9 @@
 package agent
 
 import (
-	"github.com/rylena/sshdesk-go/internal/capture"
-	"github.com/rylena/sshdesk-go/internal/capture/synthetic"
-	"github.com/rylena/sshdesk-go/internal/input"
+	"github.com/rarnu/sshdesk-go/internal/capture"
+	"github.com/rarnu/sshdesk-go/internal/capture/synthetic"
+	"github.com/rarnu/sshdesk-go/internal/input"
 )
 
 // defaultFactories keeps the development backends until the macOS and

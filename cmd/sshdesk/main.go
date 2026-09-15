@@ -11,14 +11,14 @@ import (
 
 	"golang.org/x/term"
 
-	"github.com/rylena/sshdesk-go/internal/agent"
-	"github.com/rylena/sshdesk-go/internal/bench"
-	"github.com/rylena/sshdesk-go/internal/capture"
-	"github.com/rylena/sshdesk-go/internal/client"
-	"github.com/rylena/sshdesk-go/internal/forcedcmd"
-	"github.com/rylena/sshdesk-go/internal/render"
-	"github.com/rylena/sshdesk-go/internal/render/ansi"
-	"github.com/rylena/sshdesk-go/internal/session"
+	"github.com/rarnu/sshdesk-go/internal/agent"
+	"github.com/rarnu/sshdesk-go/internal/bench"
+	"github.com/rarnu/sshdesk-go/internal/capture"
+	"github.com/rarnu/sshdesk-go/internal/client"
+	"github.com/rarnu/sshdesk-go/internal/forcedcmd"
+	"github.com/rarnu/sshdesk-go/internal/render"
+	"github.com/rarnu/sshdesk-go/internal/render/ansi"
+	"github.com/rarnu/sshdesk-go/internal/session"
 )
 
 func main() {

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/rylena/sshdesk-go/internal/render"
+	"github.com/rarnu/sshdesk-go/internal/render"
 )
 
 const csi = "\x1b["

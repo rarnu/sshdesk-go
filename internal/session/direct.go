@@ -10,13 +10,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/rylena/sshdesk-go/internal/capture"
-	"github.com/rylena/sshdesk-go/internal/input"
-	terminalparser "github.com/rylena/sshdesk-go/internal/input/terminal"
-	"github.com/rylena/sshdesk-go/internal/render"
-	"github.com/rylena/sshdesk-go/internal/render/ansi"
-	"github.com/rylena/sshdesk-go/internal/render/kitty"
-	"github.com/rylena/sshdesk-go/internal/render/probe"
+	"github.com/rarnu/sshdesk-go/internal/capture"
+	"github.com/rarnu/sshdesk-go/internal/input"
+	terminalparser "github.com/rarnu/sshdesk-go/internal/input/terminal"
+	"github.com/rarnu/sshdesk-go/internal/render"
+	"github.com/rarnu/sshdesk-go/internal/render/ansi"
+	"github.com/rarnu/sshdesk-go/internal/render/kitty"
+	"github.com/rarnu/sshdesk-go/internal/render/probe"
 )
 
 // DirectSession renders ANSI cells and consumes input through one ordinary

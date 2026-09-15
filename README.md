@@ -10,7 +10,7 @@
         YOUR DESKTOP  //  ONE SSH SESSION  //  ZERO EXTRA PORTS
 ```
 
-[![Tests](https://github.com/rylena/sshdesk-go/actions/workflows/test.yml/badge.svg)](https://github.com/rylena/sshdesk-go/actions/workflows/test.yml)
+[![Tests](https://github.com/rarnu/sshdesk-go/actions/workflows/test.yml/badge.svg)](https://github.com/rarnu/sshdesk-go/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 AI coding agents must read [AGENTS.md](AGENTS.md) before modifying this
@@ -83,14 +83,14 @@ The bootstrap downloads the SSHDESK release binary and selects the native
 installer automatically. On Linux or macOS, run this in a terminal:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rylena/sshdesk-go/main/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/rarnu/sshdesk-go/main/scripts/install.sh | sh
 ```
 
 On Windows, run this in PowerShell. It requests Administrator permission when
 needed:
 
 ```powershell
-& ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/rylena/sshdesk-go/main/scripts/install.ps1')))
+& ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/rarnu/sshdesk-go/main/scripts/install.ps1')))
 ```
 
 Both one-line entry points detect the OS, install the missing OpenSSH
@@ -124,7 +124,7 @@ For unattended installs, download the script and use `--tailscale` or
 
 ```bash
 curl -fsSLo /tmp/sshdesk-install.sh \
-  https://raw.githubusercontent.com/rylena/sshdesk-go/main/scripts/install.sh
+  https://raw.githubusercontent.com/rarnu/sshdesk-go/main/scripts/install.sh
 sh /tmp/sshdesk-install.sh --user alice --no-tailscale
 ```
 
@@ -132,7 +132,7 @@ Windows PowerShell accepts `-Tailscale` or `-NoTailscale` on the downloaded
 script block:
 
 ```powershell
-& ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/rylena/sshdesk-go/main/scripts/install.ps1'))) -NoTailscale
+& ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/rarnu/sshdesk-go/main/scripts/install.ps1'))) -NoTailscale
 ```
 
 ### Repairing a Wayland installation

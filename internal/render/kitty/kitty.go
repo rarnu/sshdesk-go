@@ -7,10 +7,10 @@ import (
 	"image"
 	"math"
 
-	"github.com/rylena/sshdesk-go/internal/capture"
-	"github.com/rylena/sshdesk-go/internal/capture/xshm"
-	"github.com/rylena/sshdesk-go/internal/render"
-	"github.com/rylena/sshdesk-go/internal/render/probe"
+	"github.com/rarnu/sshdesk-go/internal/capture"
+	"github.com/rarnu/sshdesk-go/internal/capture/xshm"
+	"github.com/rarnu/sshdesk-go/internal/render"
+	"github.com/rarnu/sshdesk-go/internal/render/probe"
 )
 
 const (

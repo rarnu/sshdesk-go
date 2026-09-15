@@ -3,7 +3,7 @@ package session
 import (
 	"math"
 
-	"github.com/rylena/sshdesk-go/internal/capture"
+	"github.com/rarnu/sshdesk-go/internal/capture"
 )
 
 // NextAutoRenderScale computes the next automatic render scale from terminal

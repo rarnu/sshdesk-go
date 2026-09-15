@@ -6,8 +6,8 @@ import (
 	"image"
 	"time"
 
-	"github.com/rylena/sshdesk-go/internal/capture"
-	"github.com/rylena/sshdesk-go/internal/capture/xshm"
+	"github.com/rarnu/sshdesk-go/internal/capture"
+	"github.com/rarnu/sshdesk-go/internal/capture/xshm"
 )
 
 // Capture grabs the desktop through the OS-native API. The grab and cursor

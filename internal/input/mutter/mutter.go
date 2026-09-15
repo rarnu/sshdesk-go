@@ -6,7 +6,7 @@
 package mutter
 
 import (
-	"github.com/rylena/sshdesk-go/internal/input"
+	"github.com/rarnu/sshdesk-go/internal/input"
 )
 
 // D-Bus names, mirroring the Python class constants.

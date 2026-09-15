@@ -8,7 +8,7 @@ import (
 
 	"github.com/godbus/dbus/v5"
 
-	"github.com/rylena/sshdesk-go/internal/input/mutter"
+	"github.com/rarnu/sshdesk-go/internal/input/mutter"
 )
 
 // D-Bus typed views of Mutter's GetCurrentState reply.

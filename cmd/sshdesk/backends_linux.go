@@ -7,12 +7,12 @@ import (
 	"os"
 	"strings"
 
-	"github.com/rylena/sshdesk-go/internal/capture"
-	"github.com/rylena/sshdesk-go/internal/capture/gnome"
-	"github.com/rylena/sshdesk-go/internal/capture/wayland"
-	x11capture "github.com/rylena/sshdesk-go/internal/capture/x11"
-	"github.com/rylena/sshdesk-go/internal/input"
-	x11input "github.com/rylena/sshdesk-go/internal/input/x11"
+	"github.com/rarnu/sshdesk-go/internal/capture"
+	"github.com/rarnu/sshdesk-go/internal/capture/gnome"
+	"github.com/rarnu/sshdesk-go/internal/capture/wayland"
+	x11capture "github.com/rarnu/sshdesk-go/internal/capture/x11"
+	"github.com/rarnu/sshdesk-go/internal/input"
+	x11input "github.com/rarnu/sshdesk-go/internal/input/x11"
 )
 
 // autoCapture resolves --capture auto like the Python detect_platform.

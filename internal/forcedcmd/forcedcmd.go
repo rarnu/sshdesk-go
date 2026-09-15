@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/rylena/sshdesk-go/internal/config"
+	"github.com/rarnu/sshdesk-go/internal/config"
 )
 
 // Deps wires the route side effects so tests can dry-run the dispatcher.

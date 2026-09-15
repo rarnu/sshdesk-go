@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rylena/sshdesk-go/internal/input/mutter"
+	"github.com/rarnu/sshdesk-go/internal/input/mutter"
 )
 
 // busCall records one generic D-Bus call.

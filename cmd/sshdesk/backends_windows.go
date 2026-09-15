@@ -5,9 +5,9 @@ package main
 import (
 	"errors"
 
-	"github.com/rylena/sshdesk-go/internal/capture"
-	"github.com/rylena/sshdesk-go/internal/capture/native"
-	"github.com/rylena/sshdesk-go/internal/input"
+	"github.com/rarnu/sshdesk-go/internal/capture"
+	"github.com/rarnu/sshdesk-go/internal/capture/native"
+	"github.com/rarnu/sshdesk-go/internal/input"
 )
 
 // autoCapture selects the BitBlt native capture, matching the Python

@@ -2,7 +2,7 @@
 // model used by the terminal renderers.
 package render
 
-import "github.com/rylena/sshdesk-go/internal/capture"
+import "github.com/rarnu/sshdesk-go/internal/capture"
 
 // Cell is one terminal cell: the foreground is the upper source pixel and the
 // background is the lower source pixel.

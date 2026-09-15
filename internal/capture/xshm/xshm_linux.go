@@ -12,7 +12,7 @@ import (
 	"github.com/jezek/xgb/xproto"
 	"golang.org/x/sys/unix"
 
-	"github.com/rylena/sshdesk-go/internal/capture"
+	"github.com/rarnu/sshdesk-go/internal/capture"
 )
 
 const (

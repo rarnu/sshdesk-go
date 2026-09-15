@@ -44,7 +44,7 @@ ssh 客户端 ──► sshd ──ForceCommand──► /usr/local/bin/sshdesk-
 ### 1.2 构建二进制
 
 ```bash
-git clone https://github.com/rylena/sshdesk-go.git
+git clone https://github.com/rarnu/sshdesk-go.git
 cd sshdesk-go
 
 # 本机构建

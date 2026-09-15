@@ -4,7 +4,7 @@
 package quartz
 
 import (
-	"github.com/rylena/sshdesk-go/internal/input"
+	"github.com/rarnu/sshdesk-go/internal/input"
 )
 
 // CGEventFlags masks (stable CoreGraphics ABI values for

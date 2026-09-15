@@ -16,8 +16,8 @@ import (
 
 	"github.com/creack/pty"
 
-	"github.com/rylena/sshdesk-go/internal/render"
-	"github.com/rylena/sshdesk-go/internal/render/ansi"
+	"github.com/rarnu/sshdesk-go/internal/render"
+	"github.com/rarnu/sshdesk-go/internal/render/ansi"
 )
 
 func testCapabilities() render.Capabilities {
@@ -63,7 +63,7 @@ func TestTerminalRestoredAfterException(t *testing.T) {
 func buildServerBinary(t *testing.T) string {
 	t.Helper()
 	binary := filepath.Join(t.TempDir(), "sshdesk")
-	build := exec.Command("go", "build", "-o", binary, "github.com/rylena/sshdesk-go/cmd/sshdesk")
+	build := exec.Command("go", "build", "-o", binary, "github.com/rarnu/sshdesk-go/cmd/sshdesk")
 	if output, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("go build: %v\n%s", err, output)
 	}

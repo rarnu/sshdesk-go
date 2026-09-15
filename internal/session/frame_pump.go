@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rylena/sshdesk-go/internal/capture"
+	"github.com/rarnu/sshdesk-go/internal/capture"
 )
 
 // CapturedFrame couples a desktop frame with its pump sequence number.

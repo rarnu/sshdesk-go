@@ -10,7 +10,7 @@ import (
 
 	"golang.org/x/term"
 
-	"github.com/rylena/sshdesk-go/internal/config"
+	"github.com/rarnu/sshdesk-go/internal/config"
 )
 
 const isWindows = true

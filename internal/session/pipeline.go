@@ -1,10 +1,10 @@
 package session
 
 import (
-	"github.com/rylena/sshdesk-go/internal/capture"
-	"github.com/rylena/sshdesk-go/internal/render"
-	"github.com/rylena/sshdesk-go/internal/render/ansi"
-	"github.com/rylena/sshdesk-go/internal/render/kitty"
+	"github.com/rarnu/sshdesk-go/internal/capture"
+	"github.com/rarnu/sshdesk-go/internal/render"
+	"github.com/rarnu/sshdesk-go/internal/render/ansi"
+	"github.com/rarnu/sshdesk-go/internal/render/kitty"
 )
 
 // renderPipeline abstracts the ANSI cell renderer and the Kitty pixel

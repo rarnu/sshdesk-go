@@ -8,9 +8,9 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/rylena/sshdesk-go/internal/render"
-	"github.com/rylena/sshdesk-go/internal/render/ansi"
-	"github.com/rylena/sshdesk-go/internal/render/probe"
+	"github.com/rarnu/sshdesk-go/internal/render"
+	"github.com/rarnu/sshdesk-go/internal/render/ansi"
+	"github.com/rarnu/sshdesk-go/internal/render/probe"
 )
 
 const csi = "\x1b["

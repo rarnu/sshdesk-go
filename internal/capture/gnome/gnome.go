@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rylena/sshdesk-go/internal/capture"
-	"github.com/rylena/sshdesk-go/internal/input"
-	"github.com/rylena/sshdesk-go/internal/input/mutter"
+	"github.com/rarnu/sshdesk-go/internal/capture"
+	"github.com/rarnu/sshdesk-go/internal/input"
+	"github.com/rarnu/sshdesk-go/internal/input/mutter"
 )
 
 const (

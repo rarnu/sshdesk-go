@@ -15,9 +15,9 @@ import (
 	"github.com/jezek/xgb"
 	"github.com/jezek/xgb/xproto"
 
-	"github.com/rylena/sshdesk-go/internal/capture"
-	"github.com/rylena/sshdesk-go/internal/capture/ffmpeg"
-	"github.com/rylena/sshdesk-go/internal/capture/xshm"
+	"github.com/rarnu/sshdesk-go/internal/capture"
+	"github.com/rarnu/sshdesk-go/internal/capture/ffmpeg"
+	"github.com/rarnu/sshdesk-go/internal/capture/xshm"
 )
 
 const (

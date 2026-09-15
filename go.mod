@@ -1,4 +1,4 @@
-module github.com/rylena/sshdesk-go
+module github.com/rarnu/sshdesk-go
 
 go 1.27.0
 

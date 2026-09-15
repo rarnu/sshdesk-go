@@ -3,7 +3,7 @@ package sendinput
 import (
 	"testing"
 
-	"github.com/rylena/sshdesk-go/internal/input"
+	"github.com/rarnu/sshdesk-go/internal/input"
 )
 
 type recordSender struct {

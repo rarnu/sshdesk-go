@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/rylena/sshdesk-go/internal/render"
+	"github.com/rarnu/sshdesk-go/internal/render"
 )
 
 func commas(value float64) string {

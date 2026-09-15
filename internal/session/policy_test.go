@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rylena/sshdesk-go/internal/capture"
-	"github.com/rylena/sshdesk-go/internal/render"
+	"github.com/rarnu/sshdesk-go/internal/capture"
+	"github.com/rarnu/sshdesk-go/internal/render"
 )
 
 func TestNextAutoRenderScale(t *testing.T) {

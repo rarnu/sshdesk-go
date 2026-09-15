@@ -3,15 +3,15 @@ package main
 import (
 	"fmt"
 
-	"github.com/rylena/sshdesk-go/internal/capture"
-	"github.com/rylena/sshdesk-go/internal/capture/gnome"
-	"github.com/rylena/sshdesk-go/internal/capture/native"
-	"github.com/rylena/sshdesk-go/internal/capture/synthetic"
-	"github.com/rylena/sshdesk-go/internal/capture/wayland"
-	"github.com/rylena/sshdesk-go/internal/input"
-	"github.com/rylena/sshdesk-go/internal/input/quartz"
-	"github.com/rylena/sshdesk-go/internal/input/sendinput"
-	"github.com/rylena/sshdesk-go/internal/input/ydotool"
+	"github.com/rarnu/sshdesk-go/internal/capture"
+	"github.com/rarnu/sshdesk-go/internal/capture/gnome"
+	"github.com/rarnu/sshdesk-go/internal/capture/native"
+	"github.com/rarnu/sshdesk-go/internal/capture/synthetic"
+	"github.com/rarnu/sshdesk-go/internal/capture/wayland"
+	"github.com/rarnu/sshdesk-go/internal/input"
+	"github.com/rarnu/sshdesk-go/internal/input/quartz"
+	"github.com/rarnu/sshdesk-go/internal/input/sendinput"
+	"github.com/rarnu/sshdesk-go/internal/input/ydotool"
 )
 
 // createCapture builds the capture backend selected by --capture, mirroring

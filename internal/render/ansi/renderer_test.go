@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rylena/sshdesk-go/internal/capture"
-	"github.com/rylena/sshdesk-go/internal/capture/synthetic"
-	"github.com/rylena/sshdesk-go/internal/render"
+	"github.com/rarnu/sshdesk-go/internal/capture"
+	"github.com/rarnu/sshdesk-go/internal/capture/synthetic"
+	"github.com/rarnu/sshdesk-go/internal/render"
 )
 
 func testWriter(color render.ColorMode, unicode bool) *Writer {

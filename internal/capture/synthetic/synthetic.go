@@ -7,7 +7,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/rylena/sshdesk-go/internal/capture"
+	"github.com/rarnu/sshdesk-go/internal/capture"
 )
 
 var (

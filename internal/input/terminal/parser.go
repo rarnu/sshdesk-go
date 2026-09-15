@@ -11,8 +11,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/rylena/sshdesk-go/internal/input"
-	"github.com/rylena/sshdesk-go/internal/render"
+	"github.com/rarnu/sshdesk-go/internal/input"
+	"github.com/rarnu/sshdesk-go/internal/render"
 )
 
 var (

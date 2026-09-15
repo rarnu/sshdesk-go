@@ -3,8 +3,8 @@ package terminal
 import (
 	"testing"
 
-	"github.com/rylena/sshdesk-go/internal/input"
-	"github.com/rylena/sshdesk-go/internal/render"
+	"github.com/rarnu/sshdesk-go/internal/input"
+	"github.com/rarnu/sshdesk-go/internal/render"
 )
 
 func feed(t *testing.T, p *Parser, data []byte, now float64) []input.Event {

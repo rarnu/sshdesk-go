@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rylena/sshdesk-go/internal/capture/synthetic"
-	terminalparser "github.com/rylena/sshdesk-go/internal/input/terminal"
-	"github.com/rylena/sshdesk-go/internal/render"
-	"github.com/rylena/sshdesk-go/internal/render/ansi"
+	"github.com/rarnu/sshdesk-go/internal/capture/synthetic"
+	terminalparser "github.com/rarnu/sshdesk-go/internal/input/terminal"
+	"github.com/rarnu/sshdesk-go/internal/render"
+	"github.com/rarnu/sshdesk-go/internal/render/ansi"
 )
 
 // Result mirrors the Python BenchmarkResult dataclass.

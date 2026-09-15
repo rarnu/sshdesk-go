@@ -5,13 +5,13 @@ package agent
 import (
 	"fmt"
 
-	"github.com/rylena/sshdesk-go/internal/capture"
-	"github.com/rylena/sshdesk-go/internal/capture/gnome"
-	"github.com/rylena/sshdesk-go/internal/capture/wayland"
-	x11capture "github.com/rylena/sshdesk-go/internal/capture/x11"
-	"github.com/rylena/sshdesk-go/internal/input"
-	x11input "github.com/rylena/sshdesk-go/internal/input/x11"
-	"github.com/rylena/sshdesk-go/internal/input/ydotool"
+	"github.com/rarnu/sshdesk-go/internal/capture"
+	"github.com/rarnu/sshdesk-go/internal/capture/gnome"
+	"github.com/rarnu/sshdesk-go/internal/capture/wayland"
+	x11capture "github.com/rarnu/sshdesk-go/internal/capture/x11"
+	"github.com/rarnu/sshdesk-go/internal/input"
+	x11input "github.com/rarnu/sshdesk-go/internal/input/x11"
+	"github.com/rarnu/sshdesk-go/internal/input/ydotool"
 )
 
 // defaultFactories resolves capture/input through platform detection on

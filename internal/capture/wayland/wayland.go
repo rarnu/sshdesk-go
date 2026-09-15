@@ -20,8 +20,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rylena/sshdesk-go/internal/capture"
-	"github.com/rylena/sshdesk-go/internal/capture/xshm"
+	"github.com/rarnu/sshdesk-go/internal/capture"
+	"github.com/rarnu/sshdesk-go/internal/capture/xshm"
 )
 
 // grabTimeout mirrors the Python subprocess timeout.

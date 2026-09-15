@@ -10,8 +10,8 @@ import (
 
 	"golang.org/x/image/draw"
 
-	"github.com/rylena/sshdesk-go/internal/capture"
-	"github.com/rylena/sshdesk-go/internal/render"
+	"github.com/rarnu/sshdesk-go/internal/capture"
+	"github.com/rarnu/sshdesk-go/internal/render"
 )
 
 // Renderer renders a desktop frame into half-block terminal cells.

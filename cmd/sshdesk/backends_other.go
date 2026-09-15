@@ -5,9 +5,9 @@ package main
 import (
 	"errors"
 
-	"github.com/rylena/sshdesk-go/internal/capture"
-	"github.com/rylena/sshdesk-go/internal/capture/synthetic"
-	"github.com/rylena/sshdesk-go/internal/input"
+	"github.com/rarnu/sshdesk-go/internal/capture"
+	"github.com/rarnu/sshdesk-go/internal/capture/synthetic"
+	"github.com/rarnu/sshdesk-go/internal/input"
 )
 
 // autoCapture keeps the synthetic development capture until the macOS and

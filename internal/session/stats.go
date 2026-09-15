@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rylena/sshdesk-go/internal/render"
+	"github.com/rarnu/sshdesk-go/internal/render"
 )
 
 type ring struct {

@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rylena/sshdesk-go/internal/agent"
+	"github.com/rarnu/sshdesk-go/internal/agent"
 )
 
 var targetPattern = regexp.MustCompile(`^[A-Za-z0-9_.%+@:-]{1,255}$`)
