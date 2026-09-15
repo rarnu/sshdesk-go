@@ -300,8 +300,9 @@ func MaterializeTile(frame *RenderedFrame, tile Tile) Tile {
 }
 
 // cropRGB24 copies a packed RGB24 rectangle out of a packed RGB24 frame.
+// The buffer comes from the pool; the writer returns it after encoding.
 func cropRGB24(src []byte, srcWidth, x, y, width, height int) []byte {
-	rgb := make([]byte, 0, width*height*3)
+	rgb := getBuffer(width * height * 3)
 	for row := y; row < y+height; row++ {
 		start := (row*srcWidth + x) * 3
 		rgb = append(rgb, src[start:start+width*3]...)
@@ -309,9 +310,10 @@ func cropRGB24(src []byte, srcWidth, x, y, width, height int) []byte {
 	return rgb
 }
 
-// cropRGB extracts a packed RGB24 rectangle from the content image.
+// cropRGB extracts a packed RGB24 rectangle from the content image. The
+// buffer comes from the pool; the writer returns it after encoding.
 func cropRGB(img *image.RGBA, x, y, width, height int) []byte {
-	rgb := make([]byte, 0, width*height*3)
+	rgb := getBuffer(width * height * 3)
 	for row := y; row < y+height; row++ {
 		base := img.PixOffset(x, row)
 		for column := 0; column < width; column++ {

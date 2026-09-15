@@ -63,3 +63,20 @@ func BenchmarkPalettePNG(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkPalettePNGPooled(b *testing.B) {
+	const width, height = 2056, 1187
+	rgb := benchFrame(width, height)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		data, release, err := palettePNGPooled(rgb, width, height)
+		if err != nil {
+			b.Fatal(err)
+		}
+		if len(data) == 0 {
+			b.Fatal("palettePNGPooled returned empty output")
+		}
+		release()
+	}
+}

@@ -109,6 +109,15 @@ func (w *Writer) appendTransmission(output []byte, prefix string, encoded []byte
 	return output
 }
 
+// encodeBase64 returns the base64 text of data in a pooled buffer,
+// avoiding the string-to-[]byte copy of EncodeToString.
+func encodeBase64(data []byte) []byte {
+	encoded := getBuffer(base64.StdEncoding.EncodedLen(len(data)))
+	encoded = encoded[:base64.StdEncoding.EncodedLen(len(data))]
+	base64.StdEncoding.Encode(encoded, data)
+	return encoded
+}
+
 // placeRGB deletes the tile's previous placement and transmits its pixels as
 // one paletted PNG placed by cell span.
 func (w *Writer) placeRGB(tile Tile) []byte {
@@ -116,11 +125,13 @@ func (w *Writer) placeRGB(tile Tile) []byte {
 	// desktop while remaining sharp enough for text and UI chrome. Smaller
 	// updates matter more than a few milliseconds of local encoding once the
 	// byte stream passes through an SSH PTY and terminal parser.
-	pngData, err := palettePNG(tile.RGB, tile.Width, tile.Height)
+	pngData, release, err := palettePNGPooled(tile.RGB, tile.Width, tile.Height)
 	if err != nil {
 		return nil
 	}
-	encoded := []byte(base64.StdEncoding.EncodeToString(pngData))
+	defer release()
+	encoded := encodeBase64(pngData)
+	defer putBuffer(encoded)
 	output := w.graphics([]byte(fmt.Sprintf(
 		"\x1b_Ga=d,d=i,i=%d,p=%d,q=1\x1b\\", tile.ImageID, PlacementID)))
 	output = append(output, []byte(fmt.Sprintf("%s%d;%dH", csi, tile.Row+1, tile.Column+1))...)
@@ -137,11 +148,13 @@ func (w *Writer) placeFull(frame *RenderedFrame, imageID int) []byte {
 	if rgb == nil {
 		rgb = rgbPixels(frame.Image)
 	}
-	pngData, err := palettePNG(rgb, width, height)
+	pngData, release, err := palettePNGPooled(rgb, width, height)
 	if err != nil {
 		return nil
 	}
-	encoded := []byte(base64.StdEncoding.EncodeToString(pngData))
+	defer release()
+	encoded := encodeBase64(pngData)
+	defer putBuffer(encoded)
 	output := []byte(fmt.Sprintf("%s%d;%dH", csi, frame.Viewport.Y+1, frame.Viewport.X+1))
 	prefix := fmt.Sprintf("a=T,q=1,C=1,z=-2,f=100,i=%d,p=%d,c=%d,r=%d",
 		imageID, PlacementID, frame.Viewport.Width, frame.Viewport.Height)
@@ -203,17 +216,22 @@ func (w *Writer) frame(tiles []Tile, clear bool) []byte {
 	if len(tiles) >= 4 {
 		packets := make([][]byte, len(tiles))
 		workers := min(4, max(1, runtime.NumCPU()))
-		semaphore := make(chan struct{}, workers)
+		tasks := make(chan int)
 		var wg sync.WaitGroup
-		for index, tile := range tiles {
+		for i := 0; i < workers; i++ {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				semaphore <- struct{}{}
-				packets[index] = w.placeRGB(tile)
-				<-semaphore
+				for index := range tasks {
+					packets[index] = w.placeRGB(tiles[index])
+					putBuffer(tiles[index].RGB)
+				}
 			}()
 		}
+		for index := range tiles {
+			tasks <- index
+		}
+		close(tasks)
 		wg.Wait()
 		for _, packet := range packets {
 			output = append(output, packet...)
@@ -221,6 +239,7 @@ func (w *Writer) frame(tiles []Tile, clear bool) []byte {
 	} else {
 		for _, tile := range tiles {
 			output = append(output, w.placeRGB(tile)...)
+			putBuffer(tile.RGB)
 		}
 	}
 	if w.probe.SynchronizedOutput {
@@ -284,7 +303,8 @@ func (w *Writer) inlineImage(
 	imageID, column, row, xOffset, yOffset, width, height int,
 	rgba []byte,
 ) []byte {
-	encoded := []byte(base64.StdEncoding.EncodeToString(rgba))
+	encoded := encodeBase64(rgba)
+	defer putBuffer(encoded)
 	output := w.graphics([]byte(fmt.Sprintf(
 		"\x1b_Ga=d,d=i,i=%d,p=%d,q=2\x1b\\", imageID, PlacementID)))
 	output = append(output, []byte(fmt.Sprintf("%s%d;%dH", csi, row+1, column+1))...)

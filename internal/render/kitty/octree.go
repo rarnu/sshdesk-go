@@ -37,9 +37,25 @@ type octree struct {
 	maxColors int
 }
 
-func newOctree(maxColors int) *octree {
-	nodes := make([]octNode, 2, 2048)
-	return &octree{nodes: nodes, maxColors: maxColors}
+// octreePool recycles the node arena between quantize runs; reset makes
+// reuse deterministic.
+var octreePool = sync.Pool{New: func() any {
+	return &octree{nodes: make([]octNode, 2, 2048)}
+}}
+
+func (q *octree) reset(maxColors int) {
+	if cap(q.nodes) < 2 {
+		q.nodes = make([]octNode, 2, 2048)
+	}
+	q.nodes = q.nodes[:2]
+	q.nodes[0] = octNode{}
+	q.nodes[1] = octNode{}
+	q.free = q.free[:0]
+	q.leaves = 0
+	for level := range q.reducible {
+		q.reducible[level] = q.reducible[level][:0]
+	}
+	q.maxColors = maxColors
 }
 
 func (q *octree) newNode() uint32 {
@@ -223,7 +239,15 @@ func (q *octree) mapPixels(rgb, pix []byte, y0, y1, width int) {
 // quantizePaletted converts packed RGB24 pixels into a paletted image with
 // at most 128 colors.
 func quantizePaletted(rgb []byte, width, height int) *image.Paletted {
-	tree := newOctree(128)
+	return quantizeInto(rgb, width, height, nil)
+}
+
+// quantizeInto quantizes into dst (len width*height, or a fresh buffer when
+// nil) and wraps it in a paletted image. The octree arena comes from a
+// pool; the returned image owns dst.
+func quantizeInto(rgb []byte, width, height int, dst []byte) *image.Paletted {
+	tree := octreePool.Get().(*octree)
+	tree.reset(128)
 	for offset := 0; offset+2 < len(rgb); offset += 3 {
 		tree.insert(rgb[offset], rgb[offset+1], rgb[offset+2])
 	}
@@ -231,7 +255,15 @@ func quantizePaletted(rgb []byte, width, height int) *image.Paletted {
 	if len(palette) == 0 {
 		palette = color.Palette{color.RGBA{A: 0xFF}}
 	}
-	img := image.NewPaletted(image.Rect(0, 0, width, height), palette)
+	if dst == nil {
+		dst = make([]byte, width*height)
+	}
+	img := &image.Paletted{
+		Pix:     dst,
+		Stride:  width,
+		Rect:    image.Rect(0, 0, width, height),
+		Palette: palette,
+	}
 	pixels := width * height
 	const minParallelPixels = 1 << 16
 	if workers := min(4, runtime.NumCPU()); pixels >= minParallelPixels && workers > 1 {
@@ -249,5 +281,6 @@ func quantizePaletted(rgb []byte, width, height int) *image.Paletted {
 	} else {
 		tree.mapPixels(rgb, img.Pix, 0, height, width)
 	}
+	octreePool.Put(tree)
 	return img
 }

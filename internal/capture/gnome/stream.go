@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"sync"
 	"syscall"
@@ -139,6 +140,9 @@ func (s *streamCapture) start() error {
 	stdout, err := command.StdoutPipe()
 	if err != nil {
 		return err
+	}
+	if file, ok := stdout.(*os.File); ok {
+		growPipe(file, s.targetWidth*s.targetHeight*3)
 	}
 	stderrPipe, err := command.StderrPipe()
 	if err != nil {

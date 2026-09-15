@@ -16,15 +16,34 @@ import (
 // and intermediate buffers makes encoding noticeably cheaper on
 // full-screen frames at a small size cost.
 func palettePNG(rgb []byte, width, height int) ([]byte, error) {
-	return encodePalettedPNG(quantizePaletted(rgb, width, height))
+	return encodePalettedPNG(quantizePaletted(rgb, width, height), nil)
+}
+
+// palettePNGPooled encodes like palettePNG but borrows the pixel-index and
+// payload buffers from the pool; the caller releases them once the payload
+// has been transmitted.
+func palettePNGPooled(rgb []byte, width, height int) (data []byte, release func(), err error) {
+	pix := getBuffer(width * height)
+	img := quantizeInto(rgb, width, height, pix[:width*height])
+	data, err = encodePalettedPNG(img, getBuffer(4096+len(img.Palette)*3+width*height/4))
+	if err != nil {
+		putBuffer(pix)
+		putBuffer(data)
+		return nil, nil, err
+	}
+	return data, func() {
+		putBuffer(pix)
+		putBuffer(data)
+	}, nil
 }
 
 var pngSignature = []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n'}
 
-func encodePalettedPNG(img *image.Paletted) ([]byte, error) {
+func encodePalettedPNG(img *image.Paletted, dst []byte) ([]byte, error) {
 	width := img.Rect.Dx()
 	height := img.Rect.Dy()
-	out := bytes.NewBuffer(make([]byte, 0, 4096+len(img.Palette)*3+width*height/4))
+	out := bytes.NewBuffer(dst)
+	out.Grow(4096 + len(img.Palette)*3 + width*height/4)
 	out.Write(pngSignature)
 
 	var ihdr [13]byte
