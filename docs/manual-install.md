@@ -271,10 +271,35 @@ go build -o sshdesk ./cmd/sshdesk
 
 ## 11. 卸载
 
+使用仓库自带脚本（Linux 需 sudo/root；macOS 为用户级卸载）：
+
 ```bash
-sudo rm -f /etc/ssh/sshd_config.d/90-sshdesk-*.conf
-sudo sshd -t && sudo systemctl reload ssh
-sudo rm -f /etc/sudoers.d/sshdesk-* /etc/sshdesk/*.conf
+# 交互确认后卸载（先列出将删除的清单）
+sudo ./scripts/uninstall.sh --user alice
+
+# 跳过确认；保留 /etc/sshdesk/alice.conf
+sudo ./scripts/uninstall.sh --user alice --yes
+sudo ./scripts/uninstall.sh --user alice --keep-config
+```
+
+脚本按安全顺序执行：先删 sshd 片段 → `sshd -t` 验证 → reload OpenSSH →
+删 sudoers 规则 → 删 `/etc/sshdesk` 配置（`--keep-config` 时保留）→
+删二进制与 9 个符号链接（只删确认指向 sshdesk 的符号链接与二进制本体，
+他人同名文件一律保留）→ 停用并删除 sshdesk-ydotoold 服务与 pinned
+ydotool（仅 Linux 且确由我们安装时）。**不会**触碰 OpenSSH 本体、
+sshd_config 主配置里的 Include 行（通用配置）、Tailscale 与其他系统包。
+
+手动等价步骤（参考，可简化）：
+
+```bash
+sudo rm -f /etc/ssh/sshd_config.d/90-sshdesk-alice.conf
+sudo sshd -t && sudo systemctl reload ssh    # 部分发行版服务名叫 sshd
+sudo rm -f /etc/sudoers.d/sshdesk-alice /etc/sshdesk/alice.conf
+sudo systemctl disable --now sshdesk-ydotoold.service 2>/dev/null
+sudo rm -f /etc/systemd/system/sshdesk-ydotoold.service \
+  /etc/modules-load.d/sshdesk-uinput.conf \
+  /usr/local/libexec/sshdesk/ydotoold /usr/local/bin/ydotool
+sudo systemctl daemon-reload
 cd /usr/local/bin && sudo rm -f sshdesk sshdesk-server sshdesk-local \
   sshdesk-bench sshdesk-forced-command sshdesk-agent sshdesk-agent-ssh \
   sshdesk-remote sshdesk-split

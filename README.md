@@ -144,6 +144,19 @@ the persistent PipeWire backend, installs the correct compositor dependencies,
 checks a real frame, and preserves the existing SSHDESK login. Then retry the
 ordinary SSH command from the client.
 
+### Uninstalling
+
+```bash
+sudo ./scripts/uninstall.sh --user alice        # add --yes to skip the confirmation
+```
+
+The uninstaller removes only what the installer created (the sshd snippet,
+sudoers rule, `/etc/sshdesk` configuration, the binary and its symlinks, and
+the ydotoold helper), validates and reloads OpenSSH afterwards, and leaves
+OpenSSH itself, the `sshd_config` Include line, Tailscale, and all other
+system packages untouched. See the
+[manual installation guide](docs/manual-install.md) for details.
+
 ## Linux host details
 
 ### Manual installation

@@ -124,7 +124,11 @@ for script in scripts/*.sh; do sh -n "$script"; done
   仅保留 `sshdesk server ""` 一行——仅 desktop 提权）、configure-sshd.sh、
   install-macos.sh（~/.local 用户级 9 链接）、install.ps1 +
   install-windows.ps1（下载 exe + Get-FileHash 校验，9 个 .cmd 子命令
-  包装）。二进制来源优先级：SSHDESK_BINARY → SSHDESK_SOURCE_DIR 本地
+  包装）、uninstall.sh（按账户卸载：先删 sshd 片段 → sshd -t + reload →
+  sudoers → /etc/sshdesk 配置（--keep-config 保留）→ 验证归属后删二进制
+  与 9 链接 → ydotoold 服务与 pinned ydotool；绝不动 OpenSSH 本体、
+  Include 行、Tailscale 与系统包；--user/--yes/--keep-config）。
+  二进制来源优先级：SSHDESK_BINARY → SSHDESK_SOURCE_DIR 本地
   构建（有 go 则自动 go build）→ GitHub releases 下载
 - `cmd/sshdesk`：单一二进制，argv[0] busybox 式分发（9 个命令名）+
   server/local/forced-command/agent/agent-ssh/remote/split/bench 子命令；

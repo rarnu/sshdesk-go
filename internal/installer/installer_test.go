@@ -40,6 +40,7 @@ func TestShellScriptsParse(t *testing.T) {
 		"install-server.sh",
 		"install-macos.sh",
 		"configure-sshd.sh",
+		"uninstall.sh",
 	} {
 		output, err := exec.Command("sh", "-n", scriptPath(t, name)).CombinedOutput()
 		if err != nil {
@@ -285,4 +286,85 @@ func TestPowerShellSyntax(t *testing.T) {
 			t.Errorf("PowerShell syntax check failed for %s: %v\n%s", name, err, output)
 		}
 	}
+}
+
+func TestUninstallOrder(t *testing.T) {
+	content := readScript(t, "uninstall.sh")
+	// The sshd snippet must be deleted before sshd -t and the reload, then
+	// sudoers, config, binaries, and the ydotoold helper in that order.
+	snippetRm := strings.Index(content, `rm -f "${sshd_snippet}"`)
+	sshdTest := strings.Index(content, `"${sshd_binary}" -t`)
+	if snippetRm < 0 || sshdTest < 0 || snippetRm >= sshdTest {
+		t.Error("uninstall.sh must remove the sshd snippet before running sshd -t")
+	}
+	steps := []string{
+		"remove_sshd_snippet\n",
+		"validate_and_reload_sshd\n",
+		"remove_sudoers_file\n",
+		"remove_account_config\n",
+		"remove_binaries\n",
+		"remove_ydotoold\n",
+	}
+	previous := -1
+	for _, step := range steps {
+		index := strings.LastIndex(content, step)
+		if index < 0 {
+			t.Fatalf("uninstall.sh is missing the %q step", step)
+		}
+		if index <= previous {
+			t.Errorf("uninstall.sh step %q is out of order", step)
+		}
+		previous = index
+	}
+}
+
+func TestUninstallNeverTouchesSystemSoftware(t *testing.T) {
+	content := readScript(t, "uninstall.sh")
+	for _, forbidden := range []string{
+		"apt remove", "apt-get remove", "dnf remove", "yum remove",
+		"pacman -R", "zypper rm", "zypper remove", "apk del",
+		"winget uninstall", "brew uninstall",
+		"rm -rf /", "rm -rf ~", "rm -rf $",
+		"openssh-server", "openssh ",
+		"uninstall tailscale", "remove tailscale", "tailscale uninstall",
+		"tailscaled", "systemctl stop ssh", "systemctl disable ssh",
+	} {
+		if strings.Contains(content, forbidden) {
+			t.Errorf("uninstall.sh must not contain %q", forbidden)
+		}
+	}
+	assertContains(t, content, "uninstall.sh untouched notice",
+		"Tailscale, and all other system packages are left untouched.")
+}
+
+func TestUninstallCoversAllCommands(t *testing.T) {
+	content := readScript(t, "uninstall.sh")
+	for _, name := range []string{
+		"sshdesk", "sshdesk-server", "sshdesk-bench", "sshdesk-local",
+		"sshdesk-forced-command", "sshdesk-agent", "sshdesk-agent-ssh",
+		"sshdesk-split", "sshdesk-remote",
+	} {
+		if !strings.Contains(content, name) {
+			t.Errorf("uninstall.sh does not cover %s", name)
+		}
+	}
+	assertContains(t, content, "uninstall.sh",
+		"90-sshdesk-${requested_user}.conf",
+		"/etc/sudoers.d/sshdesk-${requested_user}",
+		"/etc/sshdesk/${requested_user}.conf",
+		"sshdesk-ydotoold.service",
+		"/etc/modules-load.d/sshdesk-uinput.conf",
+		"/usr/local/libexec/sshdesk/ydotoold",
+		"readlink",
+	)
+}
+
+func TestUninstallFlags(t *testing.T) {
+	content := readScript(t, "uninstall.sh")
+	assertContains(t, content, "uninstall.sh",
+		"--yes", "assume_yes=1",
+		"--keep-config", "keep_config=1",
+		"--user",
+		"Proceed with the uninstall? [y/N]",
+	)
 }

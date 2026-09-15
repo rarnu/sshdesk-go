@@ -30,6 +30,24 @@
   path before dispatch, and the desktop PTY requirement and error message are
   unchanged.
 
+### Added
+
+- `scripts/uninstall.sh` (POSIX sh, Linux + macOS): removes everything the
+  installers created for one account, in a safe order — sshd snippet first,
+  then `sshd -t` + OpenSSH reload, sudoers rule, `/etc/sshdesk` configuration
+  (`--keep-config` preserves it), the binary and its nine symlinks (only
+  paths verified to be ours), and the ydotoold service with the pinned
+  ydotool binaries. OpenSSH itself, the `sshd_config` Include line,
+  Tailscale, and other system packages are never touched. Supports `--user`,
+  `--yes`, and `--keep-config`; without `--yes` it prints the removal plan
+  and asks for confirmation.
+
+### Changed
+
+- Installer completion hints now point at the explicit desktop selector
+  (`ssh -t <user>@<server> desktop`) and note that a plain `ssh` starts a
+  standard shell, matching the routing change above.
+
 ## 1.0.0 (2026-09-13)
 
 Complete Go rewrite of SSHDESK (previously a Python 3.10+ project). The user
