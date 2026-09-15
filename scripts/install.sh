@@ -630,7 +630,8 @@ if [ "${operating_system}" = "Darwin" ]; then
     SSHDESK_BINARY="${binary_path}" "${project_directory}/scripts/install-macos.sh"
     configure_macos_openssh
     say "SSHDESK is installed and macOS Remote Login is running."
-    say "Connect with: ssh ${requested_user}@<server-address>"
+    say "Desktop: ssh -t ${requested_user}@<server-address> desktop"
+    say "Plain ssh ${requested_user}@<server-address> starts a standard shell."
     say "Grant Screen Recording and Accessibility permission to the sshdesk binary"
     say "in System Settings > Privacy & Security before connecting."
     prompt_tailscale
@@ -721,7 +722,8 @@ fi
 start_openssh
 
 say "SSHDESK is installed and OpenSSH is running."
-say "Connect with: ssh ${requested_user}@<server-address>"
+say "Desktop: ssh -t ${requested_user}@<server-address> desktop"
+say "Plain ssh ${requested_user}@<server-address> starts a standard shell."
 
 # Tailscale is intentionally last so an optional network setup cannot interrupt
 # SSHDESK package installation or leave an unvalidated sshd configuration.
@@ -731,7 +733,7 @@ install_tailscale
 if command -v tailscale >/dev/null 2>&1; then
     tailscale_ip="$(tailscale ip -4 2>/dev/null | head -n 1 || true)"
     if [ -n "${tailscale_ip}" ]; then
-        say "Tailscale SSHDESK address: ssh ${requested_user}@${tailscale_ip}"
+        say "Tailscale SSHDESK desktop: ssh -t ${requested_user}@${tailscale_ip} desktop"
     fi
 fi
 say "Installation complete."

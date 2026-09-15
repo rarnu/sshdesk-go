@@ -140,7 +140,7 @@ $EndMarker
     } else {
         Start-Service sshd
     }
-    Write-Step "installed and started OpenSSH. Connect with: ssh $Account@<server-address>"
+    Write-Step "installed and started OpenSSH. Desktop: ssh -t $Account@<server-address> desktop (plain ssh starts a standard shell)"
     Write-Warning "Windows OpenSSH normally runs in Session 0. Desktop capture from a forced command is experimental and must reach the logged-in interactive desktop."
 
     $InstallTailscale = $Tailscale
