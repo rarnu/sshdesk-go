@@ -133,10 +133,11 @@ func (c *Capture) start() error {
 	c.stderrMu.Lock()
 	c.stderrChunks = nil
 	c.stderrMu.Unlock()
-	c.waitDone = make(chan struct{})
+	waitDone := make(chan struct{})
+	c.waitDone = waitDone
 	go func() {
 		command.Wait()
-		close(c.waitDone)
+		close(waitDone)
 	}()
 	c.stderrDone = make(chan struct{})
 	go c.drainStderr(stderrPipe, c.stderrDone)

@@ -12,17 +12,17 @@ func TestCommandLineMatchesSpec(t *testing.T) {
 	got := CommandLine("gst-launch-1.0", 42, 1280, 720)
 	want := []string{
 		"gst-launch-1.0", "-q",
-		"pipewiresrc path=42 do-timestamp=true keepalive-time=100",
+		"pipewiresrc", "path=42", "do-timestamp=true", "keepalive-time=100",
 		"!",
-		"queue leaky=downstream max-size-buffers=1",
+		"queue", "leaky=downstream", "max-size-buffers=1",
 		"!",
-		"videoconvert n-threads=2",
+		"videoconvert", "n-threads=2",
 		"!",
-		"videoscale method=1 n-threads=2",
+		"videoscale", "method=1", "n-threads=2",
 		"!",
 		"video/x-raw,format=RGB,width=1280,height=720,pixel-aspect-ratio=1/1",
 		"!",
-		"fdsink fd=1",
+		"fdsink", "fd=1",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("CommandLine() = %q, want %q", got, want)

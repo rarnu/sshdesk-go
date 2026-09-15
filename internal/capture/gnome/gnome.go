@@ -195,13 +195,16 @@ func (c *Capture) openStream(area Rectangle) error {
 	}
 
 	deadline := time.Now().Add(streamTimeout)
-	for c.pipewireNode == 0 && time.Now().Before(deadline) {
+	for time.Now().Before(deadline) {
+		c.mu.Lock()
+		node := c.pipewireNode
+		c.mu.Unlock()
+		if node != 0 {
+			return nil
+		}
 		time.Sleep(5 * time.Millisecond)
 	}
-	if c.pipewireNode == 0 {
-		return errors.New("GNOME did not publish its PipeWire desktop stream")
-	}
-	return nil
+	return errors.New("GNOME did not publish its PipeWire desktop stream")
 }
 
 // Size reports the desktop size.

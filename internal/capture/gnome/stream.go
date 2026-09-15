@@ -23,17 +23,17 @@ const (
 func CommandLine(executable string, node uint32, width, height int) []string {
 	return []string{
 		executable, "-q",
-		fmt.Sprintf("pipewiresrc path=%d do-timestamp=true keepalive-time=100", node),
+		"pipewiresrc", fmt.Sprintf("path=%d", node), "do-timestamp=true", "keepalive-time=100",
 		"!",
-		"queue leaky=downstream max-size-buffers=1",
+		"queue", "leaky=downstream", "max-size-buffers=1",
 		"!",
-		"videoconvert n-threads=2",
+		"videoconvert", "n-threads=2",
 		"!",
-		"videoscale method=1 n-threads=2",
+		"videoscale", "method=1", "n-threads=2",
 		"!",
 		fmt.Sprintf("video/x-raw,format=RGB,width=%d,height=%d,pixel-aspect-ratio=1/1", width, height),
 		"!",
-		"fdsink fd=1",
+		"fdsink", "fd=1",
 	}
 }
 
@@ -101,10 +101,11 @@ func (s *streamCapture) start() error {
 	s.stderrMu.Lock()
 	s.stderrChunks = nil
 	s.stderrMu.Unlock()
-	s.waitDone = make(chan struct{})
+	waitDone := make(chan struct{})
+	s.waitDone = waitDone
 	go func() {
 		command.Wait()
-		close(s.waitDone)
+		close(waitDone)
 	}()
 	s.stderrDone = make(chan struct{})
 	go s.drainStderr(stderrPipe, s.stderrDone)
