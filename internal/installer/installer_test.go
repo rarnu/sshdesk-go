@@ -52,12 +52,14 @@ func TestInstallServerSudoersNeverGrantsRoot(t *testing.T) {
 	content := readScript(t, "install-server.sh")
 	assertContains(t, content, "install-server.sh",
 		`NOPASSWD: /usr/local/bin/sshdesk server ""`,
-		`NOPASSWD: /usr/local/bin/sshdesk agent-ssh *`,
 		`rm -f "${sudoers}"`,
 		"/usr/sbin/visudo -cf",
 	)
 	if strings.Contains(content, "(root)") {
 		t.Error("install-server.sh sudoers must never grant a root command")
+	}
+	if strings.Contains(content, "agent-ssh *") {
+		t.Error("sudoers must only elevate the desktop path; agent-ssh is no longer routed by the dispatcher")
 	}
 }
 

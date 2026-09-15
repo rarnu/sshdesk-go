@@ -25,21 +25,25 @@ repository.
 (The demo records the original Python implementation; the Go rewrite delivers
 the same session experience from a single static binary.)
 
-Connect with the SSH client you already have:
+Connect with the SSH client you already have. Only the exact remote command
+`desktop` enters the graphical session; everything else is standard SSH:
 
 ```bash
-# SSHDESK desktop (default)
+# Standard login shell (unchanged OpenSSH behavior)
 ssh desktop@example.com
 
-# Normal login shell
-ssh -t desktop@example.com shell
-
-# Explicitly select SSHDESK
+# SSHDESK desktop (explicit selector)
 ssh -t desktop@example.com desktop
+
+# Any other remote command runs through the normal shell
+ssh desktop@example.com sshdesk-agent info
 ```
 
-OpenSSH authenticates the user and launches SSHDESK as a forced command. The
-active graphical desktop then appears inside that same terminal. Keyboard,
+OpenSSH authenticates the user and launches the SSHDESK dispatcher as a forced
+command. The exact remote command `desktop` starts the graphical session
+inside that same terminal; every other connection runs the authenticated
+account's login shell (or a shell `-c` remote command) exactly as if no forced
+command were installed. Keyboard,
 mouse, resize events, changed pixels, and session cleanup all travel through the
 one SSH PTY. There is no browser, custom SSH client, VNC/RDP listener, second
 password database, web server, or additional network port.
@@ -49,9 +53,10 @@ terminal receives the lower-resolution color-cell renderer, so OpenSSH, PuTTY,
 mobile clients, and embedded SSH terminals remain usable.
 
 > [!WARNING]
-> Anyone who can authenticate to an SSHDESK account can see and control the
-> active graphical session. Treat it like physical console access. Keep a
-> second administrative login available while configuring a forced command.
+> Anyone who can authenticate to an SSHDESK account can run the `desktop`
+> selector and see and control the active graphical session. Treat it like
+> physical console access. Keep a second administrative login available while
+> configuring a forced command.
 
 ## Features
 
@@ -194,19 +199,20 @@ Verify backend access first:
 /usr/local/bin/sshdesk-server --check
 ```
 
-Then connect from another terminal:
+Then connect from another terminal with the explicit desktop selector:
 
 ```bash
-ssh user@server
+ssh -t user@server desktop
 ```
 
-A PTY is required; `ssh -T` cannot display an interactive desktop. Press
-`Ctrl+] Ctrl+]` to leave.
+A PTY is required for the desktop; `ssh -T user@server desktop` cannot display
+an interactive desktop. Press `Ctrl+] Ctrl+]` to leave.
 
 ### Dedicated SSH account
 
-To preserve a desktop owner's normal SSH shell, use a dedicated login and run
-only the tightly scoped server/agent entry points as the graphical user:
+To run the desktop as a different graphical user than the SSH login, use a
+dedicated login and let only the desktop entry point execute as the graphical
+user:
 
 ```bash
 sudo useradd --create-home --shell /bin/bash sshdesk
@@ -217,44 +223,46 @@ sudo ./scripts/install-server.sh \
 sudo sshd -t && sudo systemctl reload ssh
 ```
 
-The generated sudoers rule does not grant root. OpenSSH remains the only
-authentication system.
+The generated sudoers rule only elevates the argument-free desktop server as
+the graphical user and does not grant root. Shell logins and remote commands
+always run as the authenticated `sshdesk` account itself. OpenSSH remains the
+only authentication system.
 
 ### Normal SSH shell access
 
-Pass `shell` as the remote command argument after the SSH destination:
-
-```bash
-ssh -t user@server shell
-```
-
-Plain `ssh user@server` continues to open the desktop. The explicit equivalent
-is `ssh -t user@server desktop`. OpenSSH does not accept `--shell` as a local
-option; `shell` must appear after `user@server` so it is sent to the forced
-command dispatcher.
+Plain `ssh user@server` opens the account's login shell, and any remote
+command other than the exact `desktop` selector is passed verbatim to that
+shell's `-c`, exactly as if no forced command were installed. Quoting, pipes,
+redirection, and exit codes are handled by the account's own shell, so
+existing scripts and tools keep working unchanged.
 
 The shell runs as the authenticated SSH account, never as a different `RUN_AS`
-desktop owner. Existing forwarding restrictions remain in effect. Anyone who
-can authenticate to this account can request the shell selector and receives
-the same command access as an ordinary shell login.
+desktop owner. Existing forwarding restrictions (the generated `Match` block
+disables forwarding, tunnels, and agent forwarding) remain in effect for every
+path.
 
-An SSH client alias can make the shell connection look like a normal host:
+An SSH client alias can make the desktop connection a single word:
 
 ```sshconfig
-Host server-shell
+Host server-desktop
     HostName server
     User user
     RequestTTY force
-    RemoteCommand shell
+    RemoteCommand desktop
 ```
 
-Then run `ssh server-shell` for the shell and `ssh user@server` for SSHDESK.
+Then run `ssh server-desktop` for SSHDESK and `ssh user@server` for the shell.
 
 ## Agent computer use and side-by-side work
 
-The forced-command account accepts a small fixed `sshdesk-agent` command set in
-addition to the interactive desktop. It never evaluates a received shell
-string. Any AI agent that can run CLI commands and use SSH can connect; SSHDESK
+Agent computer-use commands are ordinary remote commands: `ssh user@server
+sshdesk-agent info` runs the `sshdesk-agent` binary (a symlink installed in
+`/usr/local/bin`) through the standard shell `-c` channel, and the
+`sshdesk-agent` command set itself parses a fixed grammar that never evaluates
+a received shell string. The stricter `sshdesk-agent-ssh` allowlist wrapper
+remains installed for restricted deployments that choose to point their own
+forced command at it, but the default dispatcher no longer routes through it.
+Any AI agent that can run CLI commands and use SSH can connect; SSHDESK
 does not require a particular agent framework or model. Normal shell access and
 scripted actions at known coordinates do not require vision. To navigate an
 unfamiliar graphical desktop dynamically, the agent needs vision or a separate

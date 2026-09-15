@@ -47,27 +47,32 @@ and does not evaluate the file as code.
 
 When the SSH login and desktop owner differ, the installer creates a per-login
 sudoers file. It preserves only fixed display/render environment keys and
-permits the argument-free `sshdesk server` plus the constrained
-`sshdesk agent-ssh` dispatcher as the desktop owner. It never grants a root
-command. The dispatcher path lives in a root-owned installation directory.
-Shell-selector sessions always run as the authenticated SSH login and never use
-this sudo rule or the configured `RUN_AS` desktop owner.
+permits only the argument-free `sshdesk server` as the desktop owner — the
+single path the dispatcher may elevate. It never grants a root command, and
+shell or remote-command sessions always run as the authenticated SSH login,
+never through this sudo rule or the configured `RUN_AS` desktop owner.
 
 ## OpenSSH boundary
 
-The included configuration forces SSHDESK and disables forwarding, agent
-forwarding, tunnels, and user rc files for the matched account. Interactive
-desktop connections require a PTY. The exact remote command argument `shell`
-(or `sshdesk-shell`) opens the authenticated account's interactive login shell.
-The exact `desktop`, `sshdesk`, or `sshdesk-server` argument selects the desktop
-path. Anyone who can authenticate to the account can request the shell and is
-therefore not confined to the desktop or agent command grammar.
+The included configuration installs the SSHDESK dispatcher as the account's
+forced command and disables forwarding, agent forwarding, tunnels, and user rc
+files for the matched account. The dispatcher deliberately changes as little
+of the standard SSH attack surface as possible: only the exact remote command
+`desktop` starts the graphical session (which also requires a PTY), a
+connection without a command opens the account's login shell, and every other
+original command is passed verbatim to that shell's `-c` — byte for byte what
+sshd does without a `ForceCommand`. Anyone who can authenticate to the account
+therefore has exactly the access an ordinary SSH login grants, plus the
+ability to view and control the active graphical desktop through the
+`desktop` selector.
 
-Non-interactive connections are accepted only when `SSH_ORIGINAL_COMMAND`
-begins with the exact `sshdesk-agent` program; its arguments are parsed into a
-fixed command grammar and never passed to a shell. Every other original command
-is rejected. Keep the global OpenSSH `PermitUserEnvironment no` default; that
-directive is not portable inside a `Match` block.
+The `sshdesk-agent` command set is reachable through the standard remote
+command channel and parses a fixed grammar that never evaluates a received
+shell string; the stricter `sshdesk-agent-ssh` allowlist wrapper (basename
+check, `--output` ban, exit 126) remains installed for restricted deployments
+that point their own forced command at it, but the default dispatcher does not
+route through it. Keep the global OpenSSH `PermitUserEnvironment no` default;
+that directive is not portable inside a `Match` block.
 
 Configure public-key, password, multifactor, source-address, and rate-limit
 policy in OpenSSH as usual. Test authentication before applying `ForceCommand`,

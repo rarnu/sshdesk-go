@@ -183,7 +183,7 @@ func TestAgentSSHArgCountAndLength(t *testing.T) {
 	if got := agentSSH([]string{"id"}, &stderr); got != 126 {
 		t.Errorf("rejection = %d, want 126", got)
 	}
-	if !strings.Contains(stderr.String(), "This account accepts only SSHDESK desktop, shell selector, or agent commands.") {
+	if !strings.Contains(stderr.String(), "This account accepts only SSHDESK agent commands.") {
 		t.Errorf("rejection message missing: %q", stderr.String())
 	}
 }

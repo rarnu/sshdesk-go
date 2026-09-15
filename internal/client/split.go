@@ -33,7 +33,9 @@ func defaultTmuxRun(tmux string, args ...string) int {
 	return 0
 }
 
-// splitArguments builds the tmux split-window vector.
+// splitArguments builds the tmux split-window vector. The pane runs the
+// explicit desktop selector so it stays a visual session under the
+// standard-SSH forced-command routing.
 func splitArguments(target, direction string, size int, pane string) []string {
 	sideways := direction == "left" || direction == "right"
 	arguments := []string{"split-window"}
@@ -45,7 +47,7 @@ func splitArguments(target, direction string, size int, pane string) []string {
 	if direction == "left" || direction == "up" {
 		arguments = append(arguments, "-b")
 	}
-	arguments = append(arguments, "-p", strconv.Itoa(size), "-t", pane, "--", "ssh", target)
+	arguments = append(arguments, "-p", strconv.Itoa(size), "-t", pane, "--", "ssh", "-t", target, "desktop")
 	return arguments
 }
 

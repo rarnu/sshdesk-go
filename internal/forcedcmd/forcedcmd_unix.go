@@ -21,9 +21,11 @@ func defaultHasTerminal() bool {
 	return term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
 }
 
-// defaultExec replaces the process image; it only returns on failure.
+// defaultExec replaces the process image; it only returns on failure. A
+// dash-prefixed argv[0] (login shell) is stripped for the lookup while the
+// original vector is preserved for the new process.
 func defaultExec(argv []string) (int, error) {
-	path, err := exec.LookPath(argv[0])
+	path, err := exec.LookPath(strings.TrimPrefix(argv[0], "-"))
 	if err != nil {
 		return 1, err
 	}

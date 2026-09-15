@@ -42,10 +42,10 @@ can reduce detail dynamically when terminal writes or replies fall behind.
 Fixed values such as `0.75` or `0.5` trade image detail for less terminal
 graphics traffic on slower clients.
 
-`ssh -t user@host shell` opens the account's normal login shell. The `shell`
-selector is a remote command argument after the destination, not a local
-`--shell` option. It does not re-enable the forwarding features disabled by the
-generated OpenSSH configuration.
+Plain `ssh user@host` opens the account's normal login shell, and only the
+exact remote command `desktop` selects the graphical session. Any other remote
+command runs through the shell's `-c` as usual. Neither path re-enables the
+forwarding features disabled by the generated OpenSSH configuration.
 
 Sharp graphics also work inside tmux when tmux supports `allow-passthrough`.
 `sshdesk-split` enables it automatically and wraps each Kitty APC for tmux.

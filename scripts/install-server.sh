@@ -105,10 +105,12 @@ chmod 0644 "${config}"
 
 sudoers="/etc/sudoers.d/sshdesk-${account}"
 if [ "${run_as}" != "${account}" ]; then
+    # Only the desktop path may elevate: the argument-free server subcommand
+    # as the desktop owner. Shell and remote-command routes always run as the
+    # authenticated account, and root is never granted.
     {
         printf 'Defaults:%s env_keep += "DISPLAY XAUTHORITY WAYLAND_DISPLAY XDG_RUNTIME_DIR XDG_SESSION_TYPE XDG_CURRENT_DESKTOP DBUS_SESSION_BUS_ADDRESS YDOTOOL_SOCKET SSHDESK_RENDER SSHDESK_COLOR SSHDESK_MOUSE SSHDESK_UNICODE SSHDESK_X11_CAPTURE SSHDESK_MAX_FPS SSHDESK_SCALE TERM"\n' "${account}"
         printf '%s ALL=(%s) NOPASSWD: /usr/local/bin/sshdesk server ""\n' "${account}" "${run_as}"
-        printf '%s ALL=(%s) NOPASSWD: /usr/local/bin/sshdesk agent-ssh *\n' "${account}" "${run_as}"
     } > "${sudoers}"
     chmod 0440 "${sudoers}"
     /usr/sbin/visudo -cf "${sudoers}" >/dev/null

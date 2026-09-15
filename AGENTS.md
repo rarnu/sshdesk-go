@@ -99,13 +99,18 @@ for script in scripts/*.sh; do sh -n "$script"; done
   POSIX shlex；capture/input 经工厂函数惰性创建（Linux 按 detect_platform
   接 X11/Wayland/GNOME，darwin 接 native+quartz，windows 接
   native+sendinput，SetBackends/SetPlatform 为测试注入接缝）
-- `internal/forcedcmd`：ForceCommand 路由（desktop/shell/agent），Deps 结构
-  注入全部副作用便于 dry-run 测试；RUN_AS 分离时经 /usr/bin/sudo -n 固定
-  参数向量提权（不过 shell）；login shell 用 argv[0] 加 - 前缀（对应
-  Python 的 -l），Windows 走 COMSPEC 且 exec 降级为子进程
+- `internal/forcedcmd`：ForceCommand 路由（**新语义**：仅精确 `desktop`
+  进桌面并要求 PTY；无命令 exec 认证账户登录 shell；其他任意命令经登录
+  shell `-c` 原文透传，与标准 SSH 逐字一致），Deps 结构注入全部副作用
+  便于 dry-run 测试；白名单配置在所有路径 dispatch 前加载并 export；
+  sudo -n RUN_AS 提权仅 desktop 路径（/usr/bin/sudo 固定参数向量，不过
+  shell）；login shell 用 argv[0] 加 - 前缀，远程命令用普通 shell 路径
+  + -c（对应 sshd 原生行为）；Windows 走 COMSPEC 且 exec 降级为子进程
+  （远程命令用 /c）
 - `internal/client`：sshdesk-remote（target 白名单正则、固定 ssh argv、
-  64MiB 响应上限、超时错误）与 sshdesk-split（tmux split-window 向量、
-  allow-passthrough、不在 tmux 内时新建 detached session）
+  64MiB 响应上限、超时错误）与 sshdesk-split（tmux split-window 向量
+  显式请求 `desktop` 选择器、allow-passthrough、不在 tmux 内时新建
+  detached session）
 - `internal/bench`：SyntheticCapture(1920x1080) + ANSI 30fps 带宽基准，
   输出格式与 Python 逐字对齐
 - `internal/installer`：仅含测试的静态断言包（对应原 test_installer.py）：
@@ -116,7 +121,7 @@ for script in scripts/*.sh; do sh -n "$script"; done
   （Linux/macOS 引导，六包管理器，下载 releases 二进制 + SHA-256 校验，
   GNOME 探测改为 gst-launch-1.0/gst-inspect-1.0 pipewiresrc）、
   install-server.sh（装 /usr/local/bin/sshdesk + 8 个符号链接，sudoers
-  指向 `sshdesk server`/`sshdesk agent-ssh` 子命令）、configure-sshd.sh、
+  仅保留 `sshdesk server ""` 一行——仅 desktop 提权）、configure-sshd.sh、
   install-macos.sh（~/.local 用户级 9 链接）、install.ps1 +
   install-windows.ps1（下载 exe + Get-FileHash 校验，9 个 .cmd 子命令
   包装）。二进制来源优先级：SSHDESK_BINARY → SSHDESK_SOURCE_DIR 本地
@@ -202,8 +207,12 @@ for script in scripts/*.sh; do sh -n "$script"; done
 - Windows 输入读超时不生效，ESC 消歧等下一字节（见 PLAN.md 阶段说明）。
 - shlex 在 Windows 上也用 POSIX 规则（Python 在 Windows 用非 POSIX 模式
   保留引号；forced-command/agent-ssh 实际部署在 POSIX 服务端）。
-- forcedcmd 的 login shell 用 argv[0] 加 - 前缀实现（Python 用 -l 参数，
-  效果等价）；/etc/passwd 查不到目录服务账户时回退 $SHELL→/bin/sh。
+- **forced-command 路由语义已偏离 Python 原版（需求变更）**：仅精确
+  `desktop` 进桌面（要求 PTY，唯一 sudo RUN_AS 提权路径）；无命令 exec
+  认证账户登录 shell（argv[0] 加 - 前缀，对应 sshd 交互登录）；其他任意
+  命令经登录 shell `-c` 原文透传（对应 sshd 远程命令行为），不再路由到
+  agent-ssh allowlist（该子命令与 126/2 退出码保留供受限部署选用）。
+  /etc/passwd 查不到目录服务账户时 login shell 回退 $SHELL→/bin/sh。
 - screenshot 双线性缩放为自实现（无新依赖），PNG 用 BestSpeed 档对应
   Python 的 compress_level=1。
 - 安装脚本（阶段 8）语义逐行对齐原 Python 仓库脚本，仅有静态断言
@@ -211,9 +220,9 @@ for script in scripts/*.sh; do sh -n "$script"; done
   安装 → ssh 连接 → desktop/shell/agent 三路径的端到端实测**（阶段 8
   验收项仍缺）。差异点：
   - 产物为单二进制：install-server.sh 装 /usr/local/bin/sshdesk + 8 个
-    符号链接；sudoers 规则为 `/usr/local/bin/sshdesk server ""` 与
-    `/usr/local/bin/sshdesk agent-ssh *`（forcedcmd 提权时
-    os.Executable 解析到真实二进制路径，子命令形式）；sshd ForceCommand
+    符号链接；sudoers 仅保留 `/usr/local/bin/sshdesk server ""` 一行
+    （新路由语义下仅 desktop 提权；forcedcmd 提权时 os.Executable
+    解析到真实二进制路径，子命令形式）；sshd ForceCommand
     仍指向 sshdesk-forced-command 符号链接（argv[0] 分发）。
   - 二进制来源优先级 SSHDESK_BINARY → SSHDESK_SOURCE_DIR 本地构建
     （校验 go.mod，有 go 则自动 go build ./cmd/sshdesk）→ GitHub

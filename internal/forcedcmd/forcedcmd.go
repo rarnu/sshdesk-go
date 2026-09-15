@@ -1,6 +1,8 @@
-// Package forcedcmd routes the OpenSSH ForceCommand: desktop session, login
-// shell selector, or the agent allowlist, with optional RUN_AS elevation via
-// sudo -n (fixed argument vectors, never a shell).
+// Package forcedcmd routes the OpenSSH ForceCommand. Only the exact "desktop"
+// selector starts the desktop session; every other connection behaves exactly
+// like standard SSH: no command runs the authenticated account's login shell,
+// and any other command is passed verbatim to that shell's -c. sudo -n RUN_AS
+// elevation applies to the desktop path only.
 package forcedcmd
 
 import (
@@ -10,88 +12,69 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/rylena/sshdesk-go/internal/agent"
 	"github.com/rylena/sshdesk-go/internal/config"
 )
 
 // Deps wires the route side effects so tests can dry-run the dispatcher.
 type Deps struct {
-	Getenv       func(string) string
-	Account      func() (string, error)
-	Config       func() (map[string]string, error)
-	HasTerminal  func() bool
-	Exec         func(argv []string) (int, error)
-	ServerMain   func() int
-	AgentSSHMain func(argv []string) int
-	LoginShell   func() (string, error)
-	SelfPath     func() (string, error)
-	Stderr       io.Writer
+	Getenv      func(string) string
+	Account     func() (string, error)
+	Config      func() (map[string]string, error)
+	HasTerminal func() bool
+	Exec        func(argv []string) (int, error)
+	ServerMain  func() int
+	LoginShell  func() (string, error)
+	SelfPath    func() (string, error)
+	Stderr      io.Writer
 }
 
-var desktopCommands = map[string]bool{
-	"desktop":        true,
-	"sshdesk":        true,
-	"sshdesk-server": true,
-}
-
-var shellCommands = map[string]bool{
-	"shell":         true,
-	"sshdesk-shell": true,
-}
-
-// Main dispatches on SSH_ORIGINAL_COMMAND.
+// Main dispatches on SSH_ORIGINAL_COMMAND. The whitelist configuration is
+// loaded and exported on every path before dispatch (file overrides
+// environment, RUN_AS validated).
 func Main(d Deps) int {
+	values, elevate, ok := d.environment()
+	if !ok {
+		return 1
+	}
 	original := d.Getenv("SSH_ORIGINAL_COMMAND")
-	if original == "" {
+	if original == "desktop" {
 		if !d.HasTerminal() {
 			fmt.Fprintln(d.Stderr, "SSHDESK requires an interactive SSH terminal (PTY).")
 			return 1
 		}
-		return d.serverRoute()
-	}
-	command, _ := agent.ShlexSplit(original)
-	program := ""
-	if len(command) > 0 {
-		program = filepath.Base(command[0])
-	}
-	if program == "sshdesk-agent" {
-		return d.agentRoute(original)
-	}
-	if len(command) == 1 && desktopCommands[command[0]] {
-		if !d.HasTerminal() {
-			fmt.Fprintln(d.Stderr, "SSHDESK requires an interactive SSH terminal (PTY).")
-			return 1
+		if elevate {
+			self, err := d.SelfPath()
+			if err != nil {
+				fmt.Fprintf(d.Stderr, "sshdesk: %s\n", err)
+				return 1
+			}
+			return d.execOrReport([]string{"/usr/bin/sudo", "-n", "-u", values["RUN_AS"], "--", self, "server"})
 		}
-		return d.serverRoute()
+		d.applyEnv(values)
+		return d.ServerMain()
 	}
-	if len(command) == 1 && shellCommands[command[0]] {
-		if !d.HasTerminal() {
-			fmt.Fprintln(d.Stderr, "The SSH shell selector requires an interactive terminal (PTY).")
-			return 1
-		}
-		return d.shellRoute()
-	}
-	return d.agentRoute(original)
+	d.applyEnv(values)
+	return d.shellRoute(original)
 }
 
 // environment resolves the account, the whitelisted configuration, and
-// whether the desktop paths must elevate through sudo.
-func (d Deps) environment() (account string, values map[string]string, elevate bool, ok bool) {
+// whether the desktop path must elevate through sudo.
+func (d Deps) environment() (values map[string]string, elevate bool, ok bool) {
 	values, err := d.Config()
 	if err != nil {
 		fmt.Fprintln(d.Stderr, "Invalid SSHDESK desktop account.")
-		return "", nil, false, false
+		return nil, false, false
 	}
-	account, err = d.Account()
+	account, err := d.Account()
 	if err != nil {
 		fmt.Fprintf(d.Stderr, "sshdesk: could not determine the current account: %s\n", err)
-		return "", nil, false, false
+		return nil, false, false
 	}
-	return account, values, values["RUN_AS"] != account, true
+	return values, values["RUN_AS"] != account, true
 }
 
 // applyEnv exports the resolved whitelist values for the child session,
-// mirroring the shell wrapper's export block.
+// mirroring the original wrapper's export block on every route.
 func (d Deps) applyEnv(values map[string]string) {
 	for _, key := range config.Keys {
 		if value := values[key]; value != "" {
@@ -100,49 +83,17 @@ func (d Deps) applyEnv(values map[string]string) {
 	}
 }
 
-func (d Deps) serverRoute() int {
-	_, values, elevate, ok := d.environment()
-	if !ok {
-		return 1
-	}
-	if elevate {
-		self, err := d.SelfPath()
-		if err != nil {
-			fmt.Fprintf(d.Stderr, "sshdesk: %s\n", err)
-			return 1
-		}
-		return d.execOrReport([]string{"/usr/bin/sudo", "-n", "-u", values["RUN_AS"], "--", self, "server"})
-	}
-	d.applyEnv(values)
-	return d.ServerMain()
-}
-
-func (d Deps) agentRoute(original string) int {
-	_, values, elevate, ok := d.environment()
-	if !ok {
-		return 1
-	}
-	if elevate {
-		self, err := d.SelfPath()
-		if err != nil {
-			fmt.Fprintf(d.Stderr, "sshdesk: %s\n", err)
-			return 1
-		}
-		return d.execOrReport([]string{"/usr/bin/sudo", "-n", "-u", values["RUN_AS"], "--", self, "agent-ssh", original})
-	}
-	d.applyEnv(values)
-	return d.AgentSSHMain([]string{original})
-}
-
-// shellRoute execs the authenticated account's own login shell. It never
-// elevates through RUN_AS/sudo.
-func (d Deps) shellRoute() int {
+// shellRoute execs the authenticated account's own login shell. An empty
+// command starts an interactive login shell; otherwise the command is passed
+// verbatim through the shell's -c, exactly as sshd runs a remote command
+// without a ForceCommand. It never elevates through RUN_AS/sudo.
+func (d Deps) shellRoute(command string) int {
 	shell, err := d.LoginShell()
 	if err != nil {
-		fmt.Fprintf(d.Stderr, "sshdesk-shell: %s\n", err)
+		fmt.Fprintf(d.Stderr, "sshdesk: %s\n", err)
 		return 1
 	}
-	return d.execOrReport(shellArgv(shell))
+	return d.execOrReport(shellArgv(shell, command))
 }
 
 func (d Deps) execOrReport(argv []string) int {
@@ -154,12 +105,19 @@ func (d Deps) execOrReport(argv []string) int {
 	return code
 }
 
-// shellArgv builds the exec vector for a login shell: POSIX shells become
-// login shells through a dash-prefixed argv[0]; cmd.exe/PowerShell have no
-// login mode.
-func shellArgv(shell string) []string {
+// shellArgv builds the exec vector mirroring sshd: an interactive session is
+// a login shell through a dash-prefixed argv[0]; a remote command runs
+// through the plain shell with -c. cmd.exe/PowerShell have no login mode and
+// take /c instead.
+func shellArgv(shell, command string) []string {
 	if isWindows {
-		return []string{shell}
+		if command == "" {
+			return []string{shell}
+		}
+		return []string{shell, "/c", command}
+	}
+	if command != "" {
+		return []string{shell, "-c", command}
 	}
 	base := filepath.Base(shell)
 	if !strings.HasPrefix(base, "-") {

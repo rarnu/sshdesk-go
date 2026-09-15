@@ -326,7 +326,7 @@ func agentSSH(argv []string, stderr io.Writer) int {
 		return 2
 	}
 	if len(command) == 0 || filepath.Base(command[0]) != "sshdesk-agent" {
-		fmt.Fprintln(stderr, "This account accepts only SSHDESK desktop, shell selector, or agent commands.")
+		fmt.Fprintln(stderr, "This account accepts only SSHDESK agent commands.")
 		return 126
 	}
 	for _, value := range command[1:] {

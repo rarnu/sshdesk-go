@@ -9,12 +9,12 @@ import (
 )
 
 func TestSplitCommandIsAnArgumentVector(t *testing.T) {
-	want := []string{"split-window", "-h", "-p", "50", "-t", "%3", "--", "ssh", "alice@example.com"}
+	want := []string{"split-window", "-h", "-p", "50", "-t", "%3", "--", "ssh", "-t", "alice@example.com", "desktop"}
 	if got := splitArguments("alice@example.com", "right", 50, "%3"); !reflect.DeepEqual(got, want) {
 		t.Errorf("splitArguments = %v, want %v", got, want)
 	}
 	up := splitArguments("host", "up", 30, "%1")
-	if !reflect.DeepEqual(up, []string{"split-window", "-v", "-b", "-p", "30", "-t", "%1", "--", "ssh", "host"}) {
+	if !reflect.DeepEqual(up, []string{"split-window", "-v", "-b", "-p", "30", "-t", "%1", "--", "ssh", "-t", "host", "desktop"}) {
 		t.Errorf("up split = %v", up)
 	}
 }
@@ -233,7 +233,7 @@ func TestSplitRunsInsideTmux(t *testing.T) {
 	if !reflect.DeepEqual(calls[0], wantFirst) {
 		t.Errorf("first call = %v, want %v", calls[0], wantFirst)
 	}
-	wantSecond := []string{"/usr/bin/tmux", "split-window", "-h", "-p", "50", "-t", "%3", "--", "ssh", "alice@example.com"}
+	wantSecond := []string{"/usr/bin/tmux", "split-window", "-h", "-p", "50", "-t", "%3", "--", "ssh", "-t", "alice@example.com", "desktop"}
 	if !reflect.DeepEqual(calls[1], wantSecond) {
 		t.Errorf("second call = %v, want %v", calls[1], wantSecond)
 	}

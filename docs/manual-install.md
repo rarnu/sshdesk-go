@@ -13,9 +13,9 @@ SSHDESK 不是服务，不监听任何端口。它是一个由 OpenSSH `ForceCom
 
 ```
 ssh 客户端 ──► sshd ──ForceCommand──► /usr/local/bin/sshdesk-forced-command
-                                          ├── 无参数 / desktop → 桌面会话
-                                          ├── shell            → 登录 shell
-                                          └── sshdesk-agent …  → 受限 agent 命令
+                                          ├── 精确 desktop → 桌面会话（需 PTY，唯一提权路径）
+                                          ├── 无参数       → 认证账户登录 shell
+                                          └── 其他任意命令 → 登录 shell -c <原文>（与标准 SSH 逐字一致）
 ```
 
 因此安装 = 放二进制 + 建符号链接 + 写配置文件 + 配 sshd 的 Match 块。
@@ -150,8 +150,8 @@ ydotoold 必须能访问 `/dev/uinput`，但**绝不要**用 root 运行 sshdesk
 
 ## 6.（可选）专用 SSH 账户与 sudoers
 
-想保留桌面本人的正常 SSH shell，可用独立登录账户（例如 `sshdesk`），
-只有桌面/受限 agent 两条路径以桌面用户身份执行：
+想让桌面画面属于另一个图形用户（例如 SSH 登录账户 `sshdesk`、桌面属于
+`alice`），可用独立登录账户，只有桌面路径以桌面用户身份执行：
 
 ```bash
 sudo useradd --create-home --shell /bin/bash sshdesk
@@ -164,11 +164,11 @@ sudo ./scripts/install-server.sh sshdesk :0 /home/alice/.Xauthority alice
 ```text
 Defaults:sshdesk env_keep += "DISPLAY XAUTHORITY WAYLAND_DISPLAY XDG_RUNTIME_DIR XDG_SESSION_TYPE XDG_CURRENT_DESKTOP DBUS_SESSION_BUS_ADDRESS YDOTOOL_SOCKET SSHDESK_RENDER SSHDESK_COLOR SSHDESK_MOUSE SSHDESK_UNICODE SSHDESK_X11_CAPTURE SSHDESK_MAX_FPS SSHDESK_SCALE TERM"
 sshdesk ALL=(alice) NOPASSWD: /usr/local/bin/sshdesk server ""
-sshdesk ALL=(alice) NOPASSWD: /usr/local/bin/sshdesk agent-ssh *
 ```
 
-要点：只允许以**桌面用户**身份（不是 root）执行无参 server 和受限
-agent-ssh；`shell` 路径永远以认证账户本人运行、绝不提权。
+要点：只允许以**桌面用户**身份（不是 root）执行无参 server——这是
+调度器唯一会提权的路径；登录 shell 与任意远程命令永远以认证账户本人
+运行、绝不提权，与标准 SSH 完全一致。
 
 ## 7. 配置 sshd（生效的关键一步）
 
@@ -210,17 +210,20 @@ sudo sshd -t && sudo systemctl reload ssh    # 部分发行版服务名叫 sshd
 
 ## 8. 连接使用
 
+只有精确输入 `desktop` 才进入桌面；除此之外一切行为与标准 SSH 一致：
+
 ```bash
-# 桌面（默认，必须有 PTY）
+# 普通登录 shell（标准 SSH 行为，以认证账户身份）
 ssh alice@server
 
-# 显式选择桌面
+# 桌面（唯一选择器，必须有 PTY）
 ssh -t alice@server desktop
 
-# 普通登录 shell（以认证账户身份）
-ssh -t alice@server shell
+# 任意其他远程命令 → 登录 shell -c 逐字执行（与无 ForceCommand 时一致，
+# 引号/管道/重定向/退出码全由本账户 shell 解释）
+ssh alice@server systemctl --user status
 
-# agent 命令（无 PTY）
+# agent 命令（无 PTY，经标准 shell 通道执行 PATH 内的 sshdesk-agent）
 ssh alice@server sshdesk-agent info
 ssh alice@server sshdesk-agent screenshot --max-width 1280 > desktop.png
 ```

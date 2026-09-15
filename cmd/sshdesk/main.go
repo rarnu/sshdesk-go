@@ -82,7 +82,6 @@ func forcedCommandMain(argv []string) int {
 	}
 	deps := forcedcmd.DefaultDeps()
 	deps.ServerMain = func() int { return serverMain(nil) }
-	deps.AgentSSHMain = agent.AgentSSHMain
 	return forcedcmd.Main(deps)
 }
 

@@ -1,5 +1,35 @@
 # Changelog
 
+## Unreleased
+
+### Breaking
+
+- **Forced-command routing reduced to a single `desktop` selector.** Only the
+  exact remote command `desktop` starts the graphical session. A connection
+  without a command now opens the authenticated account's login shell, and any
+  other original command is passed verbatim to that shell's `-c`, exactly as
+  sshd behaves without a `ForceCommand`. The previous defaults and aliases are
+  gone: plain `ssh user@server` no longer opens the desktop, and `sshdesk`,
+  `sshdesk-server`, `shell`, and `sshdesk-shell` are no longer special routes
+  (they now run as ordinary shell commands).
+- The dispatcher no longer routes `sshdesk-agent ...` through the
+  `sshdesk-agent-ssh` allowlist; agent commands reach the `sshdesk-agent`
+  binary in `PATH` through the standard shell channel. The `agent-ssh`
+  subcommand and its strict allowlist (exit 126/2) remain installed for
+  restricted deployments that point their own forced command at it; its
+  rejection message now reads "This account accepts only SSHDESK agent
+  commands."
+- `sudo -n -u RUN_AS` elevation now applies to the desktop path only; shell
+  logins and remote commands always run as the authenticated account. The
+  generated sudoers file drops the `sshdesk agent-ssh *` rule and keeps only
+  the argument-free `sshdesk server ""` rule.
+- `sshdesk-split` now opens its desktop pane with `ssh -t <target> desktop`
+  to match the explicit selector.
+- The whitelist configuration (`/etc/sshdesk/<user>.conf`, file overrides
+  environment, `RUN_AS` validation) is still loaded and exported on every
+  path before dispatch, and the desktop PTY requirement and error message are
+  unchanged.
+
 ## 1.0.0 (2026-09-13)
 
 Complete Go rewrite of SSHDESK (previously a Python 3.10+ project). The user

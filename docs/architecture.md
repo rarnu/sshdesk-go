@@ -78,33 +78,38 @@ keyboard reports, and mouse reports are terminal protocols inside that stream.
 ## Agent path
 
 Agent computer use is an optional, low-frequency control path. OpenSSH invokes
-the fixed `sshdesk-agent` command without a PTY. Requests are bounded
-newline-delimited JSON because they are infrequent control operations; PNG
-observations are base64 encoded in responses. The desktop's interactive frame
-path remains the direct terminal stream and never uses JSON.
+the `sshdesk-agent` command without a PTY as an ordinary remote command: the
+forced-command dispatcher passes it verbatim to the account's shell `-c`,
+which executes the `sshdesk-agent` symlink in `/usr/local/bin`. Requests are
+bounded newline-delimited JSON because they are infrequent control operations;
+PNG observations are base64 encoded in responses. The desktop's interactive
+frame path remains the direct terminal stream and never uses JSON.
 
 ```text
-agent ── sshdesk-remote ── OpenSSH ── sshdesk-agent session
+agent ── sshdesk-remote ── OpenSSH ── shell -c "sshdesk-agent session"
                                       ├── internal/capture
                                       └── internal/input
 ```
 
-The forced-command dispatcher (internal/forcedcmd) reserves the basename
-`sshdesk-agent`, parses its arguments without a shell, and rejects unrecognized
-original commands. Standard OpenSSH connection multiplexing can reuse a
-transport for repeated agent calls.
+The `sshdesk-agent` command set parses a fixed grammar and never evaluates a
+received shell string. The stricter `sshdesk-agent-ssh` allowlist wrapper
+(fixed basename check, `--output` ban, exit 126) remains installed for
+restricted deployments that point their own forced command at it; the default
+dispatcher no longer routes through it. Standard OpenSSH connection
+multiplexing can reuse a transport for repeated agent calls.
 
-## Optional shell path
+## Standard shell path
 
-The exact remote command argument `shell` (or `sshdesk-shell`) opens an
-interactive login shell as the authenticated SSH account. It never uses the
-`RUN_AS` elevation reserved for the desktop and constrained agent paths. Plain
-PTY connections still select SSHDESK; `desktop`, `sshdesk`, and
-`sshdesk-server` select it explicitly. Other original commands remain rejected.
+Only the exact remote command `desktop` selects the graphical session (PTY
+required; `RUN_AS` sudo elevation applies here alone). With no remote command
+the dispatcher execs the authenticated account's interactive login shell; any
+other original command is passed verbatim to that shell's `-c`, exactly as
+sshd runs it without a ForceCommand. The shell always runs as the
+authenticated SSH account and never uses the `RUN_AS` elevation.
 
 ```text
 OpenSSH ForceCommand dispatcher
-    |-- no original command / desktop -- sshdesk-server
-    |-- sshdesk-agent ... -------------- restricted agent parser
-    `-- shell -------------------------- authenticated account login shell
+    |-- desktop ---------------- sshdesk-server (PTY required, RUN_AS sudo)
+    |-- no command ------------- authenticated account login shell
+    `-- anything else ---------- login shell -c <original command>
 ```

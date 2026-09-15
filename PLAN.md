@@ -291,6 +291,12 @@ scripts/                安装脚本（改写为安装 Go 二进制，逻辑与�
 
 ### 遗留验证清单（需真机/真环境，开发机无法覆盖）
 
+> **路由语义变更（2026-09-15，需求变更）**：forced-command 仅精确
+> `desktop` 进桌面；无命令 = 登录 shell；其他命令 = 登录 shell `-c` 原文
+> 透传（与标准 SSH 一致）。这是对第一部分「原项目功能点清单」第 1 节
+> 路由规则的**有意偏离**，详见 CHANGELOG.md Unreleased 与
+> internal/forcedcmd 包注释。
+
 1. Linux X11 真会话：三级降级链、XTest 输入、`--check` 全链路。
 2. wlroots/KDE Wayland 真桌面：grim/spectacle 采集 + ydotoold 输入。
 3. GNOME Wayland 真会话：Mutter/PipeWire 持久流（非幻灯片）+ RemoteDesktop
