@@ -1,10 +1,8 @@
 package kitty
 
 import (
-	"bytes"
 	"image"
 	"image/color"
-	"image/png"
 	"runtime"
 	"sync"
 )
@@ -252,16 +250,4 @@ func quantizePaletted(rgb []byte, width, height int) *image.Paletted {
 		tree.mapPixels(rgb, img.Pix, 0, height, width)
 	}
 	return img
-}
-
-// palettePNG encodes packed RGB24 pixels as a paletted PNG with fast
-// compression, matching Pillow's compress_level=1 output role.
-func palettePNG(rgb []byte, width, height int) ([]byte, error) {
-	img := quantizePaletted(rgb, width, height)
-	var buffer bytes.Buffer
-	encoder := png.Encoder{CompressionLevel: png.BestSpeed}
-	if err := encoder.Encode(&buffer, img); err != nil {
-		return nil, err
-	}
-	return buffer.Bytes(), nil
 }
