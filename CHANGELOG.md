@@ -32,18 +32,41 @@
 
 ### Added
 
-- `scripts/uninstall.sh` (POSIX sh, Linux + macOS): removes everything the
-  installers created for one account, in a safe order — sshd snippet first,
-  then `sshd -t` + OpenSSH reload, sudoers rule, `/etc/sshdesk` configuration
-  (`--keep-config` preserves it), the binary and its nine symlinks (only
-  paths verified to be ours), and the ydotoold service with the pinned
-  ydotool binaries. OpenSSH itself, the `sshd_config` Include line,
-  Tailscale, and other system packages are never touched. Supports `--user`,
-  `--yes`, and `--keep-config`; without `--yes` it prints the removal plan
-  and asks for confirmation.
+- Built-in cross-platform installer: `sshdesk --install` and
+  `sshdesk --uninstall` (also available as the `install`/`uninstall`
+  subcommands). The Linux flow (root-only) installs the binary and eight
+  symlinks in `/usr/local/bin`, writes `/etc/sshdesk/<user>.conf`, adds a
+  visudo-checked sudoers rule when `--run-as` differs from the account,
+  installs the sshd forced-command snippet with `sshd -t` validation and
+  rollback, reloads OpenSSH, configures the sandboxed `sshdesk-ydotoold`
+  service on non-GNOME Wayland sessions, reports missing capture/input tools
+  with per-package-manager suggestions, and runs a desktop access check.
+  macOS performs a user-level install in `~/.local` (sudo additionally writes
+  the sshd snippet and enables Remote Login). Windows (elevated) installs
+  `sshdesk.exe` plus `.cmd` wrappers, a PATH registry entry, the sshd_config
+  marker block with rollback, the firewall rule, and service startup.
+  Uninstall removes only what the installer created, in a safe order — sshd
+  snippet first, then `sshd -t` + OpenSSH reload, sudoers rule,
+  `/etc/sshdesk` configuration (`--keep-config` preserves it), the binary and
+  its symlinks/wrappers (only paths verified to be ours), and the ydotoold
+  helper. OpenSSH itself, the `sshd_config` Include line, and system packages
+  are never touched. Both commands support `--yes`; install also supports
+  `--user`, `--display`, `--xauthority`, and `--run-as`.
+
+### Removed
+
+- The `scripts/` directory and its test-only `internal/installer` package.
+  The curl-piped bootstrap, release-binary download with SHA-256 verification,
+  automatic package installation (OpenSSH, capture tools, pinned ydotool
+  binaries), and the interactive Tailscale offer are gone: the installer never
+  downloads code or installs packages anymore. Obtain the `sshdesk` binary
+  from a release or `go build`, then run `sshdesk --install`; install
+  OpenSSH, capture tools, ydotool, and Tailscale with the system package
+  manager when the installer reports them missing.
 
 ### Changed
 
+- The Go module path is now `github.com/rarnu/sshdesk-go`.
 - Installer completion hints now point at the explicit desktop selector
   (`ssh -t <user>@<server> desktop`) and note that a plain `ssh` starts a
   standard shell, matching the routing change above.

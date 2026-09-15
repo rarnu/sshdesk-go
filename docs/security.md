@@ -17,11 +17,12 @@ Wayland capture needs the logged-in session's runtime/D-Bus environment. GNOME
 capture and input use linked Mutter sessions as the unprivileged graphical user;
 there is no screenshot extension, root process, or input device helper on this
 path. On other Wayland desktops, ydotool input needs a narrowly configured
-`ydotoold` with `/dev/uinput` access. On systemd Linux hosts, the one-line installer isolates that helper in
+`ydotoold` with `/dev/uinput` access. On systemd Linux hosts, `sshdesk --install` isolates that helper in
 `sshdesk-ydotoold.service`, exposes a mode-0600 Unix socket owned by the desktop
-user, and restricts the service device policy to `/dev/uinput`. The downloaded
-x86-64 helper is pinned and SHA-256 verified; incompatible systems build the
-same pinned source release locally. The installer also loads the `uinput`
+user, and restricts the service device policy to `/dev/uinput`. The helper
+binaries themselves come from the distribution or the official ydotool release;
+the installer never downloads or builds them, it only reports the packages to
+install when they are missing. The installer also loads the `uinput`
 kernel module at boot when it is modular. GNOME's ScreenCast and RemoteDesktop
 interfaces are compositor-private APIs, so compatibility is validated by the
 installer's live capture/input preflight rather than assumed from a version
@@ -36,9 +37,9 @@ data is never passed to FFmpeg or a shell.
 
 The installed artifact is one static `sshdesk` binary; the command names used
 by sshd and sudoers are symlinks (or subcommands) of that binary, so there is
-no interpreter or package directory to keep consistent. The one-line installer
-verifies the downloaded release binary against its published SHA-256 before
-installing it.
+no interpreter or package directory to keep consistent. The installer is built
+into that same binary (`sshdesk --install`), so installation adds no downloaded
+code beyond the binary the operator already obtained.
 
 The installer places non-secret terminal/display settings in a root-owned,
 read-only-to-users mode-0644 file at

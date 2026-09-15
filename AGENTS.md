@@ -36,11 +36,14 @@ go build -o sshdesk ./cmd/sshdesk
 注意：macOS 上 input=auto 已接 Quartz，无 Accessibility 权限时去掉
 `--no-input` 的 --check 会按 Python 文案报权限错误并退出 1（预期行为）。
 
-安装脚本改动后须跑静态断言与语法检查：
+安装器（internal/setup）改动后除常规四项外，须在 macOS 上实测一次
+用户级往返（会写真实 ~/.local，先确认其中无外来 sshdesk 文件）：
 
 ```sh
-go test ./internal/installer/
-for script in scripts/*.sh; do sh -n "$script"; done
+go build -o sshdesk ./cmd/sshdesk
+./sshdesk --install --yes            # 用户级：~/.local/share/sshdesk + 9 链接
+~/.local/bin/sshdesk-server --check  # 需 Screen Recording 权限
+./sshdesk --uninstall --yes          # 清场，外来文件必须保留
 ```
 
 ## 退出码
@@ -113,25 +116,21 @@ for script in scripts/*.sh; do sh -n "$script"; done
   detached session）
 - `internal/bench`：SyntheticCapture(1920x1080) + ANSI 30fps 带宽基准，
   输出格式与 Python 逐字对齐
-- `internal/installer`：仅含测试的静态断言包（对应原 test_installer.py）：
-  sh -n 语法、sudoers 不含 root、env_keep 16 键、sshd Match 块、ydotool
-  pinned SHA-256、Wayland 依赖顺序、Tailscale 最后、符号链接齐全、
-  Windows 安装器锚点；pwsh/powershell 存在时做 PowerShell 解析检查
-- `scripts/`：安装脚本（语义逐行对齐原 Python 仓库脚本）：install.sh
-  （Linux/macOS 引导，六包管理器，下载 releases 二进制 + SHA-256 校验，
-  GNOME 探测改为 gst-launch-1.0/gst-inspect-1.0 pipewiresrc）、
-  install-server.sh（装 /usr/local/bin/sshdesk + 8 个符号链接，sudoers
-  仅保留 `sshdesk server ""` 一行——仅 desktop 提权）、configure-sshd.sh、
-  install-macos.sh（~/.local 用户级 9 链接）、install.ps1 +
-  install-windows.ps1（下载 exe + Get-FileHash 校验，9 个 .cmd 子命令
-  包装）、uninstall.sh（按账户卸载：先删 sshd 片段 → sshd -t + reload →
-  sudoers → /etc/sshdesk 配置（--keep-config 保留）→ 验证归属后删二进制
-  与 9 链接 → ydotoold 服务与 pinned ydotool；绝不动 OpenSSH 本体、
-  Include 行、Tailscale 与系统包；--user/--yes/--keep-config）。
-  二进制来源优先级：SSHDESK_BINARY → SSHDESK_SOURCE_DIR 本地
-  构建（有 go 则自动 go build）→ GitHub releases 下载
+- `internal/setup`：内置跨平台安装器（`sshdesk --install/--uninstall`，
+  也接受 install/uninstall 子命令形式）。渲染（/etc/sshdesk 配置、sudoers
+  两行、sshd Match 片段、Windows 标记块、ydotoold unit、.cmd 包装）全部
+  为纯函数；副作用走 Deps 结构注入（Getenv/Getuid/LookupUser/Run/Chown/
+  Confirm/OnStep 等），Linux/macOS 全流程用假 Deps + tempdir 在任意主机
+  单测。linux.go/darwin.go 无构建标签（可移植），windows.go 为
+  `//go:build windows`（x/sys/windows/registry 写 PATH、IsElevated 判
+  管理员、netsh 防火墙、sc.exe/powershell 服务）。Linux 卸载顺序：sshd
+  片段 → sshd -t → reload → sudoers → 配置（--keep-config 保留）→ 二进制
+  （ownsCommandPath 归属验证，外来文件保留）→ ydotoold；绝不动 OpenSSH
+  本体与 Include 行。安装器不下载任何内容、不装系统包，缺失依赖只警告
+  并按 apt/dnf/pacman 打印建议包名
 - `cmd/sshdesk`：单一二进制，argv[0] busybox 式分发（9 个命令名）+
-  server/local/forced-command/agent/agent-ssh/remote/split/bench 子命令；
+  server/local/forced-command/agent/agent-ssh/remote/split/bench/
+  install/uninstall 子命令；
   capture/input 后端选择在 backends*.go（Linux 按检测接 X11/Wayland/
   GNOME，darwin auto 接 native+quartz，windows auto 接 native+sendinput）
 
@@ -219,24 +218,15 @@ for script in scripts/*.sh; do sh -n "$script"; done
   /etc/passwd 查不到目录服务账户时 login shell 回退 $SHELL→/bin/sh。
 - screenshot 双线性缩放为自实现（无新依赖），PNG 用 BestSpeed 档对应
   Python 的 compress_level=1。
-- 安装脚本（阶段 8）语义逐行对齐原 Python 仓库脚本，仅有静态断言
-  （internal/installer）与 sh -n 保障，**未在 Linux 干净机器上做过一键
-  安装 → ssh 连接 → desktop/shell/agent 三路径的端到端实测**（阶段 8
-  验收项仍缺）。差异点：
-  - 产物为单二进制：install-server.sh 装 /usr/local/bin/sshdesk + 8 个
-    符号链接；sudoers 仅保留 `/usr/local/bin/sshdesk server ""` 一行
-    （新路由语义下仅 desktop 提权；forcedcmd 提权时 os.Executable
-    解析到真实二进制路径，子命令形式）；sshd ForceCommand
-    仍指向 sshdesk-forced-command 符号链接（argv[0] 分发）。
-  - 二进制来源优先级 SSHDESK_BINARY → SSHDESK_SOURCE_DIR 本地构建
-    （校验 go.mod，有 go 则自动 go build ./cmd/sshdesk）→ GitHub
-    releases 下载 `sshdesk-<os>-<arch>` + `<asset>.sha256` 校验；
-    releases 产物命名是脚本约定，发布流水线尚未建立。
-  - GNOME 依赖探测从 PyGObject/pipewiresrc 改为 gst-launch-1.0 +
-    gst-inspect-1.0 pipewiresrc；包列表移除 python3-gi/gir1.2-*，
-    apt 增加 gstreamer1.0-tools、apk 增加 gstreamer-tools。
-  - 移除全部 python3/venv/pip 依赖与检测；删除 shell 版
-    sshdesk-forced-command 包装脚本（白名单解析已在 forcedcmd 内）。
-  - Windows 安装器下载 sshdesk-windows-amd64.exe + Get-FileHash 校验，
-    9 个 .cmd 子命令包装；**未经 pwsh 实跑与 Windows 真机验证**
-    （PowerShell 语法检查在本机 skip，CI Windows runner 会实跑）。
+- 内置安装器（internal/setup，取代阶段 8 的 scripts/）：macOS 用户级
+  安装 → 9 链接 + `sshdesk-server --check` → 幂等重装 → 卸载清场已在
+  开发机实测通过（外来文件保留）。其余平台**未真机验证**：
+  - Linux 全流程以假 Deps + tempdir 单测覆盖（步骤顺序、幂等、sshd -t
+    失败回滚、sudoers/visudo、ydotoold unit、卸载顺序与归属保留），
+    **未在 Linux 干净机器上做过 --install → ssh 连接 → desktop/shell/
+    agent 三路径的端到端实测**。
+  - Windows 流程仅 GOOS=windows 交叉编译与纯函数单测（标记块替换/移除、
+    PATH 增删、.cmd 渲染）；注册表 PATH、防火墙规则、服务启停未实跑。
+  - sshd 片段首行注释从引用 scripts 路径改为 "managed by sshdesk
+    --install"（脚本已删除）；Windows 卸载为本版新增（原仓库无
+    uninstall.ps1）。

@@ -288,6 +288,10 @@ scripts/                安装脚本（改写为安装 Go 二进制，逻辑与�
 - [x] **阶段 8：安装脚本与打磨** — scripts/ 全部改写为单二进制 + 符号链接
   分发；README/docs×5/CHANGELOG 同步；internal/installer 静态断言；
   CI 加 scripts job 并对齐 Go 1.27
+- [x] **内置安装器（2026-09-15，取代阶段 8 的 scripts/）** — `sshdesk
+  --install/--uninstall` 内置跨平台安装（internal/setup），渲染纯函数 +
+  Deps 副作用注入；scripts/ 与 internal/installer 删除；macOS 用户级
+  安装/卸载往返实测通过；README/docs×5/CHANGELOG/AGENTS 同步
 
 ### 遗留验证清单（需真机/真环境，开发机无法覆盖）
 
@@ -302,8 +306,9 @@ scripts/                安装脚本（改写为安装 Go 二进制，逻辑与�
 3. GNOME Wayland 真会话：Mutter/PipeWire 持久流（非幻灯片）+ RemoteDesktop
    输入联动。
 4. Kitty/Ghostty/WezTerm 真终端：图形探测、tile 渲染、tmux passthrough。
-5. Windows 真机：BitBlt 采集、SendInput、终端生命周期、install.ps1 全程。
-6. Linux 干净机器一键安装验收：install.sh → OpenSSH 配置 → ssh 连接 →
-   desktop/shell/agent 三路径（阶段 8 原始验收项）。
-7. GitHub releases 发布流水线：脚本约定的 `sshdesk-<os>-<arch>` +
-   `.sha256` 产物尚未有对应 release/CI 发布流程。
+5. Windows 真机：BitBlt 采集、SendInput、终端生命周期、`sshdesk --install`
+   全程（注册表 PATH、防火墙规则、服务启停）。
+6. Linux 干净机器安装验收：`sshdesk --install` → OpenSSH 配置 → ssh 连接 →
+   desktop/shell/agent 三路径（原阶段 8 验收项，内置安装器同样未覆盖）。
+7. GitHub releases 发布流水线：`sshdesk-<os>-<arch>` 产物尚未有对应
+   release/CI 发布流程。

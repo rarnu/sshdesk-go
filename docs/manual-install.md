@@ -1,10 +1,11 @@
 # SSHDESK（Go 版）手动安装指南
 
-本文档介绍**不使用一键脚本**，手动构建、安装并启用 SSHDESK 的完整步骤。
-目标环境以 Linux 宿主机为主（推荐），附 macOS 手动安装说明。
+本文档介绍内置安装器 `sshdesk --install` 所完成的每一步，以及对应的
+手动等价操作。目标环境以 Linux 宿主机为主（推荐），附 macOS 说明。
 
-> 一键安装（`scripts/install.sh` / `scripts/install.ps1`）会自动完成本文的
-> 全部步骤。只有在需要审查每一步、或一键脚本不支持你的环境时才需要手动安装。
+> 大多数环境只需 `sudo ./sshdesk --install`（macOS 为 `./sshdesk --install`），
+> 它会自动完成本文的全部步骤并逐项打印结果。只有在需要审查每一步、或
+> 安装器不支持你的环境时才需要按本文手动操作。
 
 ## 0. 工作原理（30 秒版）
 
@@ -71,8 +72,8 @@ sudo ln -sf sshdesk sshdesk-remote
 sudo ln -sf sshdesk sshdesk-split
 ```
 
-> `scripts/install-server.sh` 会替你做这一步以及第 3、6 节：
-> `sudo ./scripts/install-server.sh "$USER" "$DISPLAY" "${XAUTHORITY:-$HOME/.Xauthority}"`
+> `sshdesk --install` 会替你做这一步以及第 3、6 节：
+> `sudo ./sshdesk --install`（可用 `--display` / `--xauthority` 覆盖默认值）
 
 ## 3. 写配置文件 `/etc/sshdesk/<用户>.conf`
 
@@ -139,7 +140,7 @@ echo uinput | sudo tee /etc/modules-load.d/sshdesk-uinput.conf
 sudo modprobe uinput
 
 # 3) 以桌面用户身份运行 ydotoold（可做成 systemd 用户/系统服务；
-#    scripts/install.sh 生成的系统级沙箱 unit 可直接参考）
+#    --install 生成的系统级沙箱 unit 可直接参考）
 sudo -u alice YDOTOOL_SOCKET=/run/sshdesk-ydotool/socket ydotoold &
 
 # 4) 在 /etc/sshdesk/alice.conf 中记录 socket 路径
@@ -155,7 +156,8 @@ ydotoold 必须能访问 `/dev/uinput`，但**绝不要**用 root 运行 sshdesk
 
 ```bash
 sudo useradd --create-home --shell /bin/bash sshdesk
-sudo ./scripts/install-server.sh sshdesk :0 /home/alice/.Xauthority alice
+sudo ./sshdesk --install --user sshdesk --display :0 \
+  --xauthority /home/alice/.Xauthority --run-as alice
 ```
 
 此时 `/etc/sshdesk/sshdesk.conf` 里 `RUN_AS=alice`，并生成
@@ -172,16 +174,12 @@ sshdesk ALL=(alice) NOPASSWD: /usr/local/bin/sshdesk server ""
 
 ## 7. 配置 sshd（生效的关键一步）
 
-生成 Match 块并写入 sshd 配置目录：
+生成 Match 块并写入 sshd 配置目录（`sshdesk --install` 自动完成；
+手动安装时按下述内容写入）：
 
 ```bash
-./scripts/configure-sshd.sh alice |
-  sudo tee /etc/ssh/sshd_config.d/90-sshdesk-alice.conf
-```
-
-内容如下（`configure-sshd.sh` 输出，含尾部 `Match all`）：
-
-```sshconfig
+sudo tee /etc/ssh/sshd_config.d/90-sshdesk-alice.conf <<'EOF'
+# SSHDESK forced command, managed by sshdesk --install.
 Match User alice
     ForceCommand /usr/local/bin/sshdesk-forced-command
     PermitTTY yes
@@ -193,7 +191,10 @@ Match User alice
     GatewayPorts no
     PermitUserRC no
 Match all
+EOF
 ```
+
+要点：Match 块含尾部 `Match all`，用于结束 Match 作用域。
 
 然后验证并重载：
 
@@ -243,19 +244,17 @@ sshdesk-remote alice@server session        # NDJSON 长会话
 sshdesk-split alice@server                 # tmux 左右分屏
 ```
 
-## 9. macOS 手动安装（开发/手动会话）
+## 9. macOS 安装（开发/手动会话）
 
 ```bash
 go build -o sshdesk ./cmd/sshdesk
-./scripts/install-macos.sh        # 装到 ~/.local/bin（9 个符号链接）
+./sshdesk --install        # 装到 ~/.local（二进制 + 9 个符号链接）
 ```
 
 - 需在 系统设置 → 隐私与安全性 中给运行 sshdesk 的进程授予
   **屏幕录制**（采集）与**辅助功能**（输入）权限
 - 验证：`sshdesk-server --check`
-- macOS 上配置 OpenSSH forced-command 托管属于高级用法，参考
-  `scripts/install.sh` 的 macOS 段（sshd 片段 +
-  `systemsetup -setremotelogin on`）
+- 配置 sshd 片段并开启远程登录（高级用法）：`sudo ./sshdesk --install`
 
 ## 10. 故障排查
 
@@ -271,23 +270,24 @@ go build -o sshdesk ./cmd/sshdesk
 
 ## 11. 卸载
 
-使用仓库自带脚本（Linux 需 sudo/root；macOS 为用户级卸载）：
+使用内置卸载器（Linux 需 sudo/root；macOS 为用户级卸载，sudo 会连带删除
+sshd 片段）：
 
 ```bash
 # 交互确认后卸载（先列出将删除的清单）
-sudo ./scripts/uninstall.sh --user alice
+sudo sshdesk --uninstall --user alice
 
 # 跳过确认；保留 /etc/sshdesk/alice.conf
-sudo ./scripts/uninstall.sh --user alice --yes
-sudo ./scripts/uninstall.sh --user alice --keep-config
+sudo sshdesk --uninstall --user alice --yes
+sudo sshdesk --uninstall --user alice --keep-config
 ```
 
-脚本按安全顺序执行：先删 sshd 片段 → `sshd -t` 验证 → reload OpenSSH →
+卸载按安全顺序执行：先删 sshd 片段 → `sshd -t` 验证 → reload OpenSSH →
 删 sudoers 规则 → 删 `/etc/sshdesk` 配置（`--keep-config` 时保留）→
 删二进制与 9 个符号链接（只删确认指向 sshdesk 的符号链接与二进制本体，
 他人同名文件一律保留）→ 停用并删除 sshdesk-ydotoold 服务与 pinned
 ydotool（仅 Linux 且确由我们安装时）。**不会**触碰 OpenSSH 本体、
-sshd_config 主配置里的 Include 行（通用配置）、Tailscale 与其他系统包。
+sshd_config 主配置里的 Include 行（通用配置）与其他系统包。
 
 手动等价步骤（参考，可简化）：
 

@@ -77,85 +77,86 @@ mobile clients, and embedded SSH terminals remain usable.
 - one static Go binary; command names are symlinks or subcommands, with no
   Python or other runtime dependency on the host
 
-## One-line installation
+## Installation
 
-The bootstrap downloads the SSHDESK release binary and selects the native
-installer automatically. On Linux or macOS, run this in a terminal:
+SSHDESK installs itself: the single binary carries a built-in cross-platform
+installer, so there is nothing to download besides the binary itself. Get
+`sshdesk` from a [release](https://github.com/rarnu/sshdesk-go/releases) or
+build it from a checkout (`go build -o sshdesk ./cmd/sshdesk`), then run it on
+the host.
+
+On Linux, run the installer as root:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rarnu/sshdesk-go/main/scripts/install.sh | sh
+sudo ./sshdesk --install            # add --user alice when detection is wrong
 ```
 
-On Windows, run this in PowerShell. It requests Administrator permission when
-needed:
+It installs the binary and eight command symlinks in `/usr/local/bin`, writes
+the per-account `/etc/sshdesk/<user>.conf`, adds the forced-command snippet to
+`/etc/ssh/sshd_config.d` (validated with `sshd -t` and rolled back on failure),
+reloads OpenSSH, configures the sandboxed `ydotoold` input helper on non-GNOME
+Wayland sessions, and verifies desktop access. On Wayland it detects GNOME, KDE
+Plasma, or wlroots and reports missing capture or input tools with package
+suggestions for the detected package manager; it never installs packages or
+downloads anything itself. The OpenSSH server must already be installed.
+
+On macOS, the install is user-level; rerunning with sudo additionally
+configures sshd and enables Remote Login:
+
+```bash
+./sshdesk --install
+sudo ./sshdesk --install            # optional: sshd snippet + Remote Login
+```
+
+On Windows, run the installer in an elevated PowerShell:
 
 ```powershell
-& ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/rarnu/sshdesk-go/main/scripts/install.ps1')))
+.\sshdesk.exe --install
 ```
 
-Both one-line entry points detect the OS, install the missing OpenSSH
-prerequisites, download the checksum-verified SSHDESK release binary, install
-it, validate graphical access and the forced-command configuration, and start
-the platform's OpenSSH service. On Wayland, the Linux installer detects GNOME,
-KDE Plasma, or wlroots. GNOME uses one persistent Mutter/PipeWire stream with
-compositor-native input; KDE and wlroots install a capture command and a
-checksum-verified `ydotoold` helper. They support common Linux distributions,
-macOS, and Windows 10/11. The installer asks whether to install and start
-Tailscale only after SSHDESK and OpenSSH setup succeeds.
-Tailscale carries normal OpenSSH over the private tailnet; it does not replace
-OpenSSH or add a second SSH authentication mode.
+The elevated install registers the binary directory on the system PATH, adds
+the forced-command block to `sshd_config` (validated and rolled back on
+failure), creates the OpenSSH firewall rule, and starts the service. Without
+Administrator rights it performs a user-level install only.
+
+Useful flags: `--user USER` overrides desktop-account detection, `--yes` skips
+the confirmation prompt, and Linux also accepts `--display`, `--xauthority`,
+and `--run-as` (see [dedicated SSH account](#dedicated-ssh-account)).
 
 > [!IMPORTANT]
 > Cross-platform installation does not remove OS security boundaries. macOS
 > still asks for Screen Recording and Accessibility access. Windows OpenSSH
 > normally runs in Session 0, so Windows forced-command desktop capture remains
-> experimental even though the one-line installer itself is supported. Any OS
-> can be the SSH client; Linux remains the recommended SSHDESK host.
+> experimental even though the installer itself is supported. Any OS can be the
+> SSH client; Linux remains the recommended SSHDESK host.
 
-> [!NOTE]
-> A one-line installer executes downloaded code with administrator permission
-> during setup. Review [scripts/install.sh](scripts/install.sh) or
-> [scripts/install.ps1](scripts/install.ps1) first if that is not appropriate
-> for the machine. On Linux/macOS, use `--user USER` when automatic user
-> detection is wrong.
-
-For unattended installs, download the script and use `--tailscale` or
-`--no-tailscale`:
-
-```bash
-curl -fsSLo /tmp/sshdesk-install.sh \
-  https://raw.githubusercontent.com/rarnu/sshdesk-go/main/scripts/install.sh
-sh /tmp/sshdesk-install.sh --user alice --no-tailscale
-```
-
-Windows PowerShell accepts `-Tailscale` or `-NoTailscale` on the downloaded
-script block:
-
-```powershell
-& ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/rarnu/sshdesk-go/main/scripts/install.ps1'))) -NoTailscale
-```
+For network access beyond the LAN, install Tailscale separately
+(`curl -fsSL https://tailscale.com/install.sh | sh` on Linux). Tailscale
+carries normal OpenSSH over the private tailnet; it does not replace OpenSSH
+or add a second SSH authentication mode.
 
 ### Repairing a Wayland installation
 
 If an older installation closes with a Wayland capture error or behaves like a
 slow screenshot slideshow, log into that computer's graphical desktop, open
-its local terminal, and rerun the one-line command above. It upgrades GNOME to
-the persistent PipeWire backend, installs the correct compositor dependencies,
-checks a real frame, and preserves the existing SSHDESK login. Then retry the
-ordinary SSH command from the client.
+its local terminal, and rerun `sudo sshdesk --install`. It upgrades the
+configuration, reports the compositor dependencies to install, checks a real
+frame, and preserves the existing SSHDESK login. Then retry the ordinary SSH
+command from the client.
 
 ### Uninstalling
 
 ```bash
-sudo ./scripts/uninstall.sh --user alice        # add --yes to skip the confirmation
+sudo sshdesk --uninstall            # Linux; add --yes to skip the confirmation
+sshdesk --uninstall                 # macOS user-level; sudo removes the sshd snippet too
 ```
 
 The uninstaller removes only what the installer created (the sshd snippet,
-sudoers rule, `/etc/sshdesk` configuration, the binary and its symlinks, and
-the ydotoold helper), validates and reloads OpenSSH afterwards, and leaves
-OpenSSH itself, the `sshd_config` Include line, Tailscale, and all other
-system packages untouched. See the
-[manual installation guide](docs/manual-install.md) for details.
+sudoers rule, `/etc/sshdesk` configuration, the binary and its symlinks or
+wrappers, and the ydotoold helper), validates and reloads OpenSSH afterwards,
+and leaves OpenSSH itself, the `sshd_config` Include line, and all system
+packages untouched. `--keep-config` preserves `/etc/sshdesk/<user>.conf`. See
+the [manual installation guide](docs/manual-install.md) for details.
 
 ## Linux host details
 
@@ -172,35 +173,28 @@ an OpenSSH server, and the capture/input tools for the active display stack:
 | GNOME Wayland | persistent Mutter + PipeWire/GStreamer | Mutter RemoteDesktop API |
 | KDE Plasma Wayland | `spectacle` | `ydotool` + `ydotoold` |
 
-The one-line installer handles these dependencies automatically. For a manual
-installation, GNOME needs the GStreamer command-line tools, base plugins, and
-the GStreamer PipeWire plugin. Other Wayland desktops need their listed capture
-command and ydotool 1.0.4 or newer. FFmpeg is the preferred X11 capture path.
-Non-GNOME Wayland input requires `ydotoold` access to `/dev/uinput`; do not run
-the whole SSHDESK server as root.
+`sshdesk --install` checks for these tools and suggests the packages to
+install, but never installs them itself. GNOME needs the GStreamer
+command-line tools, base plugins, and the GStreamer PipeWire plugin. Other
+Wayland desktops need their listed capture command and ydotool 1.0.4 or newer.
+FFmpeg is the preferred X11 capture path. Non-GNOME Wayland input requires
+`ydotoold` access to `/dev/uinput`; do not run the whole SSHDESK server as
+root.
 
-From the repository on the server (build the binary first, or set
-`SSHDESK_BINARY` to a downloaded release binary):
+From the repository on the server (build the binary first):
 
 ```bash
 go build -o sshdesk ./cmd/sshdesk
-
-sudo ./scripts/install-server.sh \
-  "$USER" "$DISPLAY" "${XAUTHORITY:-$HOME/.Xauthority}"
-
-./scripts/configure-sshd.sh "$USER" |
-  sudo tee "/etc/ssh/sshd_config.d/90-sshdesk-$USER.conf"
-sudo sshd -t
-sudo systemctl reload ssh  # some distributions call this service sshd
+sudo ./sshdesk --install
 ```
 
-Use the active display value (`:0`, `:1`, and so on). On Wayland, preserve the
-logged-in graphical user's session variables when running the installer:
+On Wayland, preserve the logged-in graphical user's session variables when
+running the installer so they are recorded in the configuration:
 
 ```bash
 sudo --preserve-env=WAYLAND_DISPLAY,XDG_RUNTIME_DIR,XDG_SESSION_TYPE,\
 XDG_CURRENT_DESKTOP,DBUS_SESSION_BUS_ADDRESS,YDOTOOL_SOCKET \
-  ./scripts/install-server.sh "$USER" "${DISPLAY:-}" "${XAUTHORITY:-}"
+  ./sshdesk --install
 ```
 
 This records the compositor, runtime, D-Bus, and optional ydotool settings. Check the
@@ -229,11 +223,9 @@ user:
 
 ```bash
 sudo useradd --create-home --shell /bin/bash sshdesk
-sudo ./scripts/install-server.sh \
-  sshdesk :0 /home/alice/.Xauthority alice
-./scripts/configure-sshd.sh sshdesk |
-  sudo tee /etc/ssh/sshd_config.d/90-sshdesk.conf
-sudo sshd -t && sudo systemctl reload ssh
+sudo ./sshdesk --install \
+  --user sshdesk --display :0 \
+  --xauthority /home/alice/.Xauthority --run-as alice
 ```
 
 The generated sudoers rule only elevates the argument-free desktop server as
@@ -358,12 +350,15 @@ for smoother sessions on slower clients or networks.
 
 Linux is the primary, fully integrated OpenSSH host. Native Quartz capture and
 input on macOS and BitBlt capture plus SendInput on Windows are available for
-development and manually launched sessions. The repository-local commands below
-are useful for development; most users should use the one-line installers above:
+development and manually launched sessions. Install with the built-in
+installer:
 
 ```bash
-./scripts/install-macos.sh
-powershell -ExecutionPolicy Bypass -File scripts/install-windows.ps1
+./sshdesk --install                   # macOS, user-level (add sudo for sshd)
+```
+
+```powershell
+.\sshdesk.exe --install               # Windows, elevated PowerShell
 ```
 
 macOS requires Screen Recording and Accessibility permission for the installed
