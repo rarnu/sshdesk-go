@@ -249,7 +249,7 @@ func TestCaptureClosedFails(t *testing.T) {
 	}
 }
 
-func TestSetTargetSizeClampsAndRestarts(t *testing.T) {
+func TestSetTargetSizeClampsWithoutRestarting(t *testing.T) {
 	_, capture := openStreamFixture()
 	if err := capture.open(); err != nil {
 		t.Fatalf("open() error = %v", err)
@@ -262,11 +262,36 @@ func TestSetTargetSizeClampsAndRestarts(t *testing.T) {
 	if capture.targetWidth != 4480 || capture.targetHeight != 100 {
 		t.Fatalf("target = %dx%d, want 4480x100", capture.targetWidth, capture.targetHeight)
 	}
-	if !live.closed || capture.stream != nil {
-		t.Fatal("SetTargetSize did not stop the live stream")
+	if live.closed || capture.stream != live {
+		t.Fatal("SetTargetSize stopped the live stream")
 	}
 	if err := capture.SetTargetSize(0, 100); err == nil {
 		t.Fatal("SetTargetSize(0, 100) did not fail")
+	}
+}
+
+func TestCaptureScalesNativeFrameToTarget(t *testing.T) {
+	_, capture := openStreamFixture()
+	if err := capture.open(); err != nil {
+		t.Fatalf("open() error = %v", err)
+	}
+	var startedWidth, startedHeight int
+	capture.newStream = func(node uint32, width, height int) frameStream {
+		startedWidth, startedHeight = width, height
+		return &fakeStream{frames: []streamFrame{{RGB: make([]byte, 4480*1600*3), CapturedNs: 7}}}
+	}
+	if err := capture.SetTargetSize(2240, 800); err != nil {
+		t.Fatalf("SetTargetSize() error = %v", err)
+	}
+	frame, err := capture.Capture()
+	if err != nil {
+		t.Fatalf("Capture() error = %v", err)
+	}
+	if startedWidth != 4480 || startedHeight != 1600 {
+		t.Fatalf("stream started at %dx%d, want native 4480x1600", startedWidth, startedHeight)
+	}
+	if frame.Image.Rect.Dx() != 2240 || frame.Image.Rect.Dy() != 800 {
+		t.Fatalf("frame image size = %dx%d, want 2240x800", frame.Image.Rect.Dx(), frame.Image.Rect.Dy())
 	}
 }
 

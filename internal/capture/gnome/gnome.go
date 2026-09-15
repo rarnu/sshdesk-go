@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rarnu/sshdesk-go/internal/capture"
+	"github.com/rarnu/sshdesk-go/internal/capture/xshm"
 	"github.com/rarnu/sshdesk-go/internal/input"
 	"github.com/rarnu/sshdesk-go/internal/input/mutter"
 )
@@ -229,19 +230,17 @@ func (c *Capture) setCursorPosition(x, y int) {
 	c.hasCursor = true
 }
 
-// SetTargetSize clamps the renderer target to the desktop and restarts the
-// stream on the next Capture when it moves.
+// SetTargetSize clamps the renderer target to the desktop. The PipeWire
+// stream keeps running at the native desktop size and Capture scales
+// frames down, so moving the target never restarts the capture process.
 func (c *Capture) SetTargetSize(width, height int) error {
 	if err := capture.ValidateTargetSize(width, height); err != nil {
 		return err
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	target := [2]int{min(width, c.desktopWidth), min(height, c.desktopHeight)}
-	if target != [2]int{c.targetWidth, c.targetHeight} {
-		c.targetWidth, c.targetHeight = target[0], target[1]
-		c.stopStream()
-	}
+	c.targetWidth = min(width, c.desktopWidth)
+	c.targetHeight = min(height, c.desktopHeight)
 	return nil
 }
 
@@ -255,19 +254,17 @@ func (c *Capture) SetFrameRate(framesPerSecond float64) error {
 	return nil
 }
 
-// startStream lazily starts the gst-launch child at the target size.
+// startStream lazily starts the gst-launch child at the native desktop
+// size. The pipeline is resolution-independent of the renderer target, so
+// the child process is started once and survives SetTargetSize calls.
 func (c *Capture) startStream() error {
 	if c.stream != nil {
 		return nil
 	}
-	width, height := c.targetWidth, c.targetHeight
-	if width <= 0 || height <= 0 {
-		width, height = c.desktopWidth, c.desktopHeight
-	}
 	if c.pipewireNode == 0 {
 		return errors.New("the GNOME PipeWire stream is not available")
 	}
-	c.stream = c.newStream(c.pipewireNode, width, height)
+	c.stream = c.newStream(c.pipewireNode, c.desktopWidth, c.desktopHeight)
 	return nil
 }
 
@@ -309,28 +306,18 @@ func (c *Capture) Capture() (*capture.Frame, error) {
 			return nil, fmt.Errorf("GNOME PipeWire capture failed: %v", firstError)
 		}
 	}
+	img := rgb24ToRGBA(frame.RGB, c.desktopWidth, c.desktopHeight)
+	if c.targetWidth > 0 && c.targetHeight > 0 &&
+		(c.targetWidth != c.desktopWidth || c.targetHeight != c.desktopHeight) {
+		img = xshm.Scale(img, c.targetWidth, c.targetHeight)
+	}
 	return &capture.Frame{
-		Image:         rgb24ToRGBA(frame.RGB, c.streamWidth(), c.streamHeight()),
+		Image:         img,
 		CapturedNs:    frame.CapturedNs,
 		DesktopWidth:  c.desktopWidth,
 		DesktopHeight: c.desktopHeight,
 		ContentDigest: frame.ContentDigest,
 	}, nil
-}
-
-// streamWidth/streamHeight resolve the dimensions the stream produces.
-func (c *Capture) streamWidth() int {
-	if c.targetWidth > 0 {
-		return c.targetWidth
-	}
-	return c.desktopWidth
-}
-
-func (c *Capture) streamHeight() int {
-	if c.targetHeight > 0 {
-		return c.targetHeight
-	}
-	return c.desktopHeight
 }
 
 // CreateInputBackend links a MutterInput to the same remote desktop
