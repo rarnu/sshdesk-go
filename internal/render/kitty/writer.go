@@ -132,7 +132,12 @@ func (w *Writer) placeRGB(tile Tile) []byte {
 // placeFull transmits one canvas image instead of making the terminal decode
 // every tile.
 func (w *Writer) placeFull(frame *RenderedFrame, imageID int) []byte {
-	pngData, err := palettePNG(rgbPixels(frame.Image), frame.Image.Rect.Dx(), frame.Image.Rect.Dy())
+	rgb := frame.RGB
+	width, height := frame.contentSize()
+	if rgb == nil {
+		rgb = rgbPixels(frame.Image)
+	}
+	pngData, err := palettePNG(rgb, width, height)
 	if err != nil {
 		return nil
 	}

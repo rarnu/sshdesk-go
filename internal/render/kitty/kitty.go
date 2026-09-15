@@ -47,7 +47,9 @@ type Tile struct {
 	RGB         []byte
 }
 
-// RenderedFrame is a desktop frame laid out in terminal pixel space.
+// RenderedFrame is a desktop frame laid out in terminal pixel space. The
+// content pixels are either Image (RGBA) or packed RGB24 in RGB with
+// RGBWidth/RGBHeight, mirroring the form the capture backend delivered.
 type RenderedFrame struct {
 	TerminalWidth  int
 	TerminalHeight int
@@ -56,7 +58,18 @@ type RenderedFrame struct {
 	CellWidth      int
 	CellHeight     int
 	Image          *image.RGBA
+	RGB            []byte
+	RGBWidth       int
+	RGBHeight      int
 	Tiles          []Tile
+}
+
+// contentSize returns the content pixel dimensions in either encoding.
+func (f *RenderedFrame) contentSize() (int, int) {
+	if f.Image != nil {
+		return f.Image.Rect.Dx(), f.Image.Rect.Dy()
+	}
+	return f.RGBWidth, f.RGBHeight
 }
 
 // FrameUpdate is a rendered frame plus the tiles that changed.
@@ -68,7 +81,8 @@ type FrameUpdate struct {
 
 // ChangedPercentage is the share of content pixels covered by the update.
 func (u FrameUpdate) ChangedPercentage() float64 {
-	total := u.Frame.Image.Rect.Dx() * u.Frame.Image.Rect.Dy()
+	contentWidth, contentHeight := u.Frame.contentSize()
+	total := contentWidth * contentHeight
 	if total == 0 {
 		return 0.0
 	}
@@ -205,13 +219,19 @@ func (r *Renderer) Render(frame *capture.Frame, width, height int) *RenderedFram
 	top := viewport.Y
 
 	var content *image.RGBA
-	source := frame.Image
-	if source != nil && source.Rect.Dx() == imageWidth && source.Rect.Dy() == imageHeight {
-		content = source
-	} else if source != nil {
-		content = xshm.Scale(source, imageWidth, imageHeight)
+	var contentRGB []byte
+	if frame.RGB != nil && frame.RGBWidth == imageWidth && frame.RGBHeight == imageHeight {
+		contentRGB = frame.RGB
 	} else {
-		content = image.NewRGBA(image.Rect(0, 0, imageWidth, imageHeight))
+		source := frame.RGBAImage()
+		switch {
+		case source.Rect.Empty():
+			content = image.NewRGBA(image.Rect(0, 0, imageWidth, imageHeight))
+		case source.Rect.Dx() == imageWidth && source.Rect.Dy() == imageHeight:
+			content = source
+		default:
+			content = xshm.Scale(source, imageWidth, imageHeight)
+		}
 	}
 
 	tileTargetPixels := min(TileTargetPixels, max(80, min(imageWidth, imageHeight)/2))
@@ -253,6 +273,9 @@ func (r *Renderer) Render(frame *capture.Frame, width, height int) *RenderedFram
 		CellWidth:      cellWidth,
 		CellHeight:     cellHeight,
 		Image:          content,
+		RGB:            contentRGB,
+		RGBWidth:       imageWidth,
+		RGBHeight:      imageHeight,
 		Tiles:          tiles,
 	}
 }
@@ -260,14 +283,30 @@ func (r *Renderer) Render(frame *capture.Frame, width, height int) *RenderedFram
 // MaterializeTile crops the tile's RGB pixels out of the frame content and
 // stamps its content digest.
 func MaterializeTile(frame *RenderedFrame, tile Tile) Tile {
-	contentCellWidth := float64(frame.Image.Rect.Dx()) / float64(frame.Viewport.Width)
-	contentCellHeight := float64(frame.Image.Rect.Dy()) / float64(frame.Viewport.Height)
+	contentWidth, contentHeight := frame.contentSize()
+	contentCellWidth := float64(contentWidth) / float64(frame.Viewport.Width)
+	contentCellHeight := float64(contentHeight) / float64(frame.Viewport.Height)
 	x := pyRound(float64(tile.Column-frame.Viewport.X) * contentCellWidth)
 	y := pyRound(float64(tile.Row-frame.Viewport.Y) * contentCellHeight)
-	rgb := cropRGB(frame.Image, x, y, tile.Width, tile.Height)
+	var rgb []byte
+	if frame.RGB != nil {
+		rgb = cropRGB24(frame.RGB, contentWidth, x, y, tile.Width, tile.Height)
+	} else {
+		rgb = cropRGB(frame.Image, x, y, tile.Width, tile.Height)
+	}
 	tile.Digest = capture.DigestPixels(rgb)
 	tile.RGB = rgb
 	return tile
+}
+
+// cropRGB24 copies a packed RGB24 rectangle out of a packed RGB24 frame.
+func cropRGB24(src []byte, srcWidth, x, y, width, height int) []byte {
+	rgb := make([]byte, 0, width*height*3)
+	for row := y; row < y+height; row++ {
+		start := (row*srcWidth + x) * 3
+		rgb = append(rgb, src[start:start+width*3]...)
+	}
+	return rgb
 }
 
 // cropRGB extracts a packed RGB24 rectangle from the content image.
@@ -333,6 +372,51 @@ func regionChanged(a, b *image.RGBA, x0, y0, x1, y1 int) bool {
 	return false
 }
 
+// differenceBoundsRGB24 is differenceBounds for packed RGB24 frames.
+func differenceBoundsRGB24(a, b []byte, width, height int) (left, top, right, bottom int, changed bool) {
+	left, top, right, bottom = width, height, 0, 0
+	for y := 0; y < height; y++ {
+		row := y * width * 3
+		for x := 0; x < width; x++ {
+			offset := row + x*3
+			if a[offset] != b[offset] ||
+				a[offset+1] != b[offset+1] ||
+				a[offset+2] != b[offset+2] {
+				changed = true
+				if x < left {
+					left = x
+				}
+				if x >= right {
+					right = x + 1
+				}
+				if y < top {
+					top = y
+				}
+				if y >= bottom {
+					bottom = y + 1
+				}
+			}
+		}
+	}
+	return left, top, right, bottom, changed
+}
+
+// regionChangedRGB24 is regionChanged for packed RGB24 frames.
+func regionChangedRGB24(a, b []byte, width, x0, y0, x1, y1 int) bool {
+	for y := y0; y < y1; y++ {
+		row := y * width * 3
+		for x := x0; x < x1; x++ {
+			offset := row + x*3
+			if a[offset] != b[offset] ||
+				a[offset+1] != b[offset+1] ||
+				a[offset+2] != b[offset+2] {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // Diff computes the changed tiles between two rendered frames, escalating to
 // a full update when the changed area crosses the replace threshold.
 func (r *Renderer) Diff(previous, current *RenderedFrame) FrameUpdate {
@@ -345,18 +429,31 @@ func (r *Renderer) Diff(previous, current *RenderedFrame) FrameUpdate {
 		previous.PixelViewport != current.PixelViewport ||
 		previous.CellWidth != current.CellWidth ||
 		previous.CellHeight != current.CellHeight ||
-		previous.Image.Rect.Dx() != current.Image.Rect.Dx() ||
-		previous.Image.Rect.Dy() != current.Image.Rect.Dy() ||
 		len(previous.Tiles) != len(current.Tiles) {
 		return FrameUpdate{Kind: render.UpdateFull, Frame: current, Changes: current.Tiles}
 	}
-	left, top, right, bottom, changed := differenceBounds(previous.Image, current.Image)
+	previousWidth, previousHeight := previous.contentSize()
+	currentWidth, currentHeight := current.contentSize()
+	if previousWidth != currentWidth || previousHeight != currentHeight {
+		return FrameUpdate{Kind: render.UpdateFull, Frame: current, Changes: current.Tiles}
+	}
+	// A mid-session switch between RGBA and RGB24 content repaints once.
+	if (previous.RGB == nil) != (current.RGB == nil) {
+		return FrameUpdate{Kind: render.UpdateFull, Frame: current, Changes: current.Tiles}
+	}
+	var left, top, right, bottom int
+	var changed bool
+	if current.RGB != nil {
+		left, top, right, bottom, changed = differenceBoundsRGB24(previous.RGB, current.RGB, currentWidth, currentHeight)
+	} else {
+		left, top, right, bottom, changed = differenceBounds(previous.Image, current.Image)
+	}
 	if !changed {
 		return FrameUpdate{Kind: render.UpdateUnchanged, Frame: current}
 	}
-	totalPixels := current.Image.Rect.Dx() * current.Image.Rect.Dy()
-	contentCellWidth := float64(current.Image.Rect.Dx()) / float64(current.Viewport.Width)
-	contentCellHeight := float64(current.Image.Rect.Dy()) / float64(current.Viewport.Height)
+	totalPixels := currentWidth * currentHeight
+	contentCellWidth := float64(currentWidth) / float64(current.Viewport.Width)
+	contentCellHeight := float64(currentHeight) / float64(current.Viewport.Height)
 	changedPixels := 0
 	var changes []Tile
 	for _, tile := range current.Tiles {
@@ -365,7 +462,13 @@ func (r *Renderer) Diff(previous, current *RenderedFrame) FrameUpdate {
 		if x >= right || y >= bottom || x+tile.Width <= left || y+tile.Height <= top {
 			continue
 		}
-		if !regionChanged(previous.Image, current.Image, x, y, x+tile.Width, y+tile.Height) {
+		tileChanged := false
+		if current.RGB != nil {
+			tileChanged = regionChangedRGB24(previous.RGB, current.RGB, currentWidth, x, y, x+tile.Width, y+tile.Height)
+		} else {
+			tileChanged = regionChanged(previous.Image, current.Image, x, y, x+tile.Width, y+tile.Height)
+		}
+		if !tileChanged {
 			continue
 		}
 		changes = append(changes, MaterializeTile(current, tile))

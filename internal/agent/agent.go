@@ -183,7 +183,7 @@ func (c *Controller) Screenshot(maxWidth int) ([]byte, int, int, error) {
 	if err != nil {
 		return nil, 0, 0, err
 	}
-	img := frame.Image
+	img := frame.RGBAImage()
 	if maxWidth > 0 && img.Rect.Dx() > maxWidth {
 		height := max(1, int(math.RoundToEven(float64(img.Rect.Dy())*float64(maxWidth)/float64(img.Rect.Dx()))))
 		img = resizeBilinear(img, maxWidth, height)

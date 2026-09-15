@@ -3,7 +3,6 @@ package gnome
 import (
 	"errors"
 	"fmt"
-	"image"
 	"os/exec"
 	"sync"
 	"time"
@@ -320,13 +319,26 @@ func (c *Capture) Capture() (*capture.Frame, error) {
 	desktopWidth, desktopHeight := c.desktopWidth, c.desktopHeight
 	targetWidth, targetHeight := c.targetWidth, c.targetHeight
 	c.mu.Unlock()
-	img := rgb24ToRGBA(frame.RGB, desktopWidth, desktopHeight)
 	if targetWidth > 0 && targetHeight > 0 &&
 		(targetWidth != desktopWidth || targetHeight != desktopHeight) {
-		img = xshm.Scale(img, targetWidth, targetHeight)
+		img := xshm.Scale(capture.RGB24ToRGBA(frame.RGB, desktopWidth, desktopHeight), targetWidth, targetHeight)
+		return &capture.Frame{
+			Image:         img,
+			CapturedNs:    frame.CapturedNs,
+			DesktopWidth:  desktopWidth,
+			DesktopHeight: desktopHeight,
+			ContentDigest: frame.ContentDigest,
+		}, nil
 	}
+	// The common path hands the packed RGB24 frame straight to the renderer
+	// without an RGBA expansion. The stream recycles its buffers on the next
+	// read, so the frame owns an exact copy.
+	rgb := make([]byte, len(frame.RGB))
+	copy(rgb, frame.RGB)
 	return &capture.Frame{
-		Image:         img,
+		RGB:           rgb,
+		RGBWidth:      desktopWidth,
+		RGBHeight:     desktopHeight,
 		CapturedNs:    frame.CapturedNs,
 		DesktopWidth:  desktopWidth,
 		DesktopHeight: desktopHeight,
@@ -384,17 +396,4 @@ func (c *Capture) Close() {
 		_, _ = sessionBus.call(RemoteName, remotePath, RemoteSessionInterface, "Stop", stopTimeout)
 	}
 	sessionBus.close()
-}
-
-// rgb24ToRGBA expands packed RGB24 pixels into an RGBA image.
-func rgb24ToRGBA(rgb []byte, width, height int) *image.RGBA {
-	img := image.NewRGBA(image.Rect(0, 0, width, height))
-	for i := 0; i < width*height && i*3+2 < len(rgb); i++ {
-		s, d := i*3, i*4
-		img.Pix[d] = rgb[s]
-		img.Pix[d+1] = rgb[s+1]
-		img.Pix[d+2] = rgb[s+2]
-		img.Pix[d+3] = 0xFF
-	}
-	return img
 }

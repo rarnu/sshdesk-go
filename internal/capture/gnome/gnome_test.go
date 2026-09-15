@@ -328,3 +328,35 @@ func TestCreateInputBackendLinksSession(t *testing.T) {
 		t.Fatalf("cursor = (%d, %d, %v), want (10, 20, true)", x, y, ok)
 	}
 }
+
+func TestCaptureDeliversRGB24WithoutTarget(t *testing.T) {
+	_, capture := openStreamFixture()
+	if err := capture.open(); err != nil {
+		t.Fatalf("open() error = %v", err)
+	}
+	pixels := make([]byte, 4480*1600*3)
+	for i := range pixels {
+		pixels[i] = byte(i)
+	}
+	capture.newStream = func(node uint32, width, height int) frameStream {
+		return &fakeStream{frames: []streamFrame{{RGB: pixels, CapturedNs: 7, ContentDigest: []byte("12345678")}}}
+	}
+	frame, err := capture.Capture()
+	if err != nil {
+		t.Fatalf("Capture() error = %v", err)
+	}
+	if frame.Image != nil {
+		t.Fatal("unscaled capture must not expand pixels to RGBA")
+	}
+	if frame.RGBWidth != 4480 || frame.RGBHeight != 1600 {
+		t.Fatalf("RGB24 size = %dx%d, want 4480x1600", frame.RGBWidth, frame.RGBHeight)
+	}
+	if len(frame.RGB) != len(pixels) || frame.RGB[12345] != pixels[12345] {
+		t.Fatal("RGB24 pixels were not carried through")
+	}
+	// The frame owns its pixels: mutating the stream buffer must not leak.
+	pixels[12345] ^= 0xFF
+	if frame.RGB[12345] == pixels[12345] {
+		t.Fatal("frame shares the stream buffer")
+	}
+}

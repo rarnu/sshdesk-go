@@ -11,9 +11,14 @@ import (
 
 // Frame is an immutable RGB desktop frame. DesktopWidth/DesktopHeight
 // preserve the remote coordinate space when a backend captures directly at
-// the renderer's smaller target size.
+// the renderer's smaller target size. Pixels arrive either as Image (RGBA)
+// or as packed RGB24 in RGB with RGBWidth/RGBHeight; hot paths should
+// consume whichever form is present instead of converting.
 type Frame struct {
 	Image         *image.RGBA
+	RGB           []byte
+	RGBWidth      int
+	RGBHeight     int
 	CapturedNs    int64
 	DesktopWidth  int
 	DesktopHeight int
@@ -27,7 +32,7 @@ func (f *Frame) Width() int {
 	if f.Image != nil {
 		return f.Image.Rect.Dx()
 	}
-	return 0
+	return f.RGBWidth
 }
 
 func (f *Frame) Height() int {
@@ -37,7 +42,31 @@ func (f *Frame) Height() int {
 	if f.Image != nil {
 		return f.Image.Rect.Dy()
 	}
-	return 0
+	return f.RGBHeight
+}
+
+// RGBAImage returns the frame pixels as an RGBA image, expanding packed
+// RGB24 when the backend delivered that form. It allocates on the RGB24
+// path, so per-frame consumers should branch on the raw fields instead;
+// this is for rare uses like screenshots.
+func (f *Frame) RGBAImage() *image.RGBA {
+	if f.Image != nil {
+		return f.Image
+	}
+	return RGB24ToRGBA(f.RGB, f.RGBWidth, f.RGBHeight)
+}
+
+// RGB24ToRGBA expands packed RGB24 pixels into an RGBA image.
+func RGB24ToRGBA(rgb []byte, width, height int) *image.RGBA {
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+	for i := 0; i < width*height && i*3+2 < len(rgb); i++ {
+		s, d := i*3, i*4
+		img.Pix[d] = rgb[s]
+		img.Pix[d+1] = rgb[s+1]
+		img.Pix[d+2] = rgb[s+2]
+		img.Pix[d+3] = 0xFF
+	}
+	return img
 }
 
 // DigestPixels returns the blake2s-8 content digest of raw RGB24 pixels.

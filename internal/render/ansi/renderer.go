@@ -91,16 +91,18 @@ func (r *Renderer) Render(frame *capture.Frame, width, height int) *render.Rende
 	imageHeight := viewport.Height * 2
 	targetWidth, targetHeight := viewport.Width, imageHeight
 
-	source := frame.Image
 	var pixels *image.RGBA
-	if source != nil && source.Rect.Dx() == targetWidth && source.Rect.Dy() == targetHeight {
-		pixels = source
-	} else if source != nil {
-		resized := image.NewRGBA(image.Rect(0, 0, targetWidth, targetHeight))
-		draw.BiLinear.Scale(resized, resized.Rect, source, source.Rect, draw.Over, nil)
-		pixels = resized
-	} else {
+	if frame.Image == nil && frame.RGB == nil {
 		pixels = image.NewRGBA(image.Rect(0, 0, targetWidth, targetHeight))
+	} else {
+		source := frame.RGBAImage()
+		if source.Rect.Dx() == targetWidth && source.Rect.Dy() == targetHeight {
+			pixels = source
+		} else {
+			resized := image.NewRGBA(image.Rect(0, 0, targetWidth, targetHeight))
+			draw.BiLinear.Scale(resized, resized.Rect, source, source.Rect, draw.Over, nil)
+			pixels = resized
+		}
 	}
 
 	black := render.Cell{}

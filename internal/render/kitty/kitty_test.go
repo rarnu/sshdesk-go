@@ -1,6 +1,7 @@
 package kitty
 
 import (
+	"bytes"
 	"image"
 	"testing"
 
@@ -225,5 +226,72 @@ func TestDiffEscalatesToFullPastThreshold(t *testing.T) {
 	}
 	if len(update.Changes) != len(second.Tiles) {
 		t.Error("FULL update must carry every tile")
+	}
+}
+
+func TestRendererDiffsRGB24Content(t *testing.T) {
+	renderer := testRenderer(t, 0, 1.0)
+	targetW, targetH := renderer.TargetSize(1920, 1080, 80, 24)
+	content := make([]byte, targetW*targetH*3)
+	for i := 0; i < len(content); i += 3 {
+		content[i] = 12
+		content[i+1] = 34
+		content[i+2] = 56
+	}
+	first := renderer.Render(&capture.Frame{
+		RGB:           content,
+		RGBWidth:      targetW,
+		RGBHeight:     targetH,
+		DesktopWidth:  1920,
+		DesktopHeight: 1080,
+	}, 80, 24)
+	if first.Image != nil {
+		t.Error("RGB24 content must not be expanded to RGBA")
+	}
+	if string(first.RGB) != string(content) {
+		t.Error("RGB24 content must be carried without resampling")
+	}
+	if got := renderer.Diff(nil, first).Kind; got != render.UpdateFull {
+		t.Errorf("diff(nil) = %v, want FULL", got)
+	}
+
+	modified := bytes.Clone(content)
+	for y := 20; y < 30; y++ {
+		for x := 40; x < 50; x++ {
+			offset := (y*targetW + x) * 3
+			modified[offset] = 255
+			modified[offset+1] = 0
+			modified[offset+2] = 255
+		}
+	}
+	second := renderer.Render(&capture.Frame{
+		RGB:           modified,
+		RGBWidth:      targetW,
+		RGBHeight:     targetH,
+		DesktopWidth:  1920,
+		DesktopHeight: 1080,
+	}, 80, 24)
+	update := renderer.Diff(first, second)
+	if update.Kind != render.UpdateDelta {
+		t.Fatalf("small RGB24 change kind = %v, want DELTA", update.Kind)
+	}
+	if len(update.Changes) == 0 || len(update.Changes) >= len(second.Tiles) {
+		t.Fatalf("DELTA changes = %d of %d tiles", len(update.Changes), len(second.Tiles))
+	}
+	for _, tile := range update.Changes {
+		if len(tile.Digest) != 8 || len(tile.RGB) != tile.Width*tile.Height*3 {
+			t.Errorf("tile %d not materialized: digest %d bytes, rgb %d bytes",
+				tile.ImageID, len(tile.Digest), len(tile.RGB))
+		}
+	}
+
+	// A representation switch must repaint the whole canvas.
+	rgba := renderer.Render(&capture.Frame{
+		Image:         capture.RGB24ToRGBA(content, targetW, targetH),
+		DesktopWidth:  1920,
+		DesktopHeight: 1080,
+	}, 80, 24)
+	if got := renderer.Diff(second, rgba).Kind; got != render.UpdateFull {
+		t.Errorf("RGB24 -> RGBA diff = %v, want FULL", got)
 	}
 }
