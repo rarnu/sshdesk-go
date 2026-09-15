@@ -127,7 +127,7 @@ SSHDESK_MOUSE=auto
 SSHDESK_UNICODE=auto
 SSHDESK_X11_CAPTURE=auto
 SSHDESK_MAX_FPS=auto
-SSHDESK_SCALE=auto
+SSHDESK_SCALE=1.0
 `
 	if got := f.read(t, p.accountConfig("alice")); got != wantConfig {
 		t.Errorf("config =\n%s\nwant:\n%s", got, wantConfig)
@@ -534,5 +534,112 @@ func TestLinuxInstallHarvestedKDETriggersYdotooldNote(t *testing.T) {
 	}
 	if !strings.Contains(output, "Detected a KDE Wayland session for user alice") {
 		t.Errorf("missing detection note:\n%s", output)
+	}
+}
+
+func TestLinuxInstallHeadlessStillWritesConfigAndWarns(t *testing.T) {
+	f := newLinuxFixture(t)
+	// No DISPLAY, no Wayland variables, no harvest: a headless server.
+	f.deps.Getenv = envMap("USER", "alice")
+	code := linuxInstall(f.deps, InstallOptions{User: "alice", Yes: true}, f.paths)
+	if code != 0 {
+		t.Fatalf("install exit = %d\noutput:\n%s", code, f.stdout.String())
+	}
+	// The config still gets the X11 defaults and no Wayland keys.
+	values := configValues(t, f.read(t, f.paths.accountConfig("alice")))
+	if values["DISPLAY"] != ":0" || values["XAUTHORITY"] != "/home/alice/.Xauthority" {
+		t.Errorf("headless defaults wrong: %v", values)
+	}
+	for _, key := range waylandKeys {
+		if _, ok := values[key]; ok {
+			t.Errorf("headless config must not contain %s: %v", key, values)
+		}
+	}
+	if values["SSHDESK_SCALE"] != "1.0" {
+		t.Errorf("SSHDESK_SCALE = %q, want 1.0", values["SSHDESK_SCALE"])
+	}
+	// The access check is skipped (it could only fail), and the install ends
+	// with a prominent warning plus recovery instructions.
+	joined := strings.Join(f.runs, "\n")
+	if strings.Contains(joined, "server --check") {
+		t.Errorf("the access check must be skipped when headless:\n%s", joined)
+	}
+	output := f.stdout.String()
+	for _, fragment := range []string{
+		"WARNING: no graphical session was detected for user alice.",
+		"sudo sshdesk --install",
+		f.paths.accountConfig("alice"),
+		"skipping the desktop access check",
+	} {
+		if !strings.Contains(output, fragment) {
+			t.Errorf("warning missing %q:\n%s", fragment, output)
+		}
+	}
+}
+
+func TestLinuxInstallX11SessionWritesNoWaylandKeys(t *testing.T) {
+	f := newLinuxFixture(t)
+	// A live X11 session: DISPLAY survives in the process environment.
+	f.deps.Getenv = envMap("USER", "alice", "DISPLAY", ":1",
+		"XAUTHORITY", "/home/alice/.Xauthority")
+	code := linuxInstall(f.deps, InstallOptions{User: "alice", Yes: true}, f.paths)
+	if code != 0 {
+		t.Fatalf("install exit = %d\noutput:\n%s", code, f.stdout.String())
+	}
+	values := configValues(t, f.read(t, f.paths.accountConfig("alice")))
+	if values["DISPLAY"] != ":1" {
+		t.Errorf("DISPLAY = %q, want :1", values["DISPLAY"])
+	}
+	for _, key := range waylandKeys {
+		if _, ok := values[key]; ok {
+			t.Errorf("X11 config must not contain %s: %v", key, values)
+		}
+	}
+	// A detected session runs the access check with exactly the config
+	// environment.
+	joined := strings.Join(f.runs, "\n")
+	if !strings.Contains(joined,
+		"sudo -n -u alice env DISPLAY=:1 XAUTHORITY=/home/alice/.Xauthority "+
+			f.paths.binPath()+" server --check") {
+		t.Errorf("verify-access did not run with the config environment:\n%s", joined)
+	}
+	if strings.Contains(f.stdout.String(), "no graphical session was detected") {
+		t.Errorf("an X11 session must not trigger the headless warning:\n%s", f.stdout.String())
+	}
+}
+
+func TestLinuxInstallVerifyEnvMatchesConfig(t *testing.T) {
+	f := newLinuxFixture(t)
+	f.deps.Getenv = envMap("USER", "alice")
+	f.deps.HarvestSession = func(int) map[string]string {
+		return map[string]string{
+			"WAYLAND_DISPLAY":     "wayland-0",
+			"XDG_RUNTIME_DIR":     "/run/user/1000",
+			"XDG_SESSION_TYPE":    "wayland",
+			"XDG_CURRENT_DESKTOP": "sway",
+			"DISPLAY":             ":3",
+			"XAUTHORITY":          "/run/user/1000/.mutter-Xwaylandauth.XYZ",
+		}
+	}
+	code := linuxInstall(f.deps, InstallOptions{User: "alice", Yes: true}, f.paths)
+	if code != 0 {
+		t.Fatalf("install exit = %d\noutput:\n%s", code, f.stdout.String())
+	}
+	values := configValues(t, f.read(t, f.paths.accountConfig("alice")))
+	// The harvested values reach both the config and the check unchanged.
+	if values["DISPLAY"] != ":3" ||
+		values["XAUTHORITY"] != "/run/user/1000/.mutter-Xwaylandauth.XYZ" {
+		t.Errorf("harvested DISPLAY/XAUTHORITY not recorded: %v", values)
+	}
+	joined := strings.Join(f.runs, "\n")
+	want := "sudo -n -u alice env DISPLAY=" + values["DISPLAY"] +
+		" XAUTHORITY=" + values["XAUTHORITY"] +
+		" WAYLAND_DISPLAY=" + values["WAYLAND_DISPLAY"] +
+		" XDG_RUNTIME_DIR=" + values["XDG_RUNTIME_DIR"] +
+		" XDG_SESSION_TYPE=" + values["XDG_SESSION_TYPE"] +
+		" XDG_CURRENT_DESKTOP=" + values["XDG_CURRENT_DESKTOP"] +
+		" " + f.paths.binPath() + " server --check"
+	if !strings.Contains(joined, want) {
+		t.Errorf("verify-access environment diverges from the config:\nwant: %s\nruns:\n%s", want, joined)
 	}
 }

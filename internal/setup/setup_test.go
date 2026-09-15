@@ -122,7 +122,7 @@ SSHDESK_MOUSE=auto
 SSHDESK_UNICODE=auto
 SSHDESK_X11_CAPTURE=auto
 SSHDESK_MAX_FPS=auto
-SSHDESK_SCALE=auto
+SSHDESK_SCALE=1.0
 `
 	if got := RenderConfig(":0", "/home/alice/.Xauthority", "alice", env); got != want {
 		t.Errorf("RenderConfig mismatch:\n%s\nwant:\n%s", got, want)

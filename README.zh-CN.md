@@ -189,13 +189,16 @@ SSHDESK_MOUSE=auto
 SSHDESK_UNICODE=auto
 SSHDESK_X11_CAPTURE=auto
 SSHDESK_MAX_FPS=auto
-SSHDESK_SCALE=auto
+SSHDESK_SCALE=1.0
 ```
 
 解析采用固定的 16 键白名单（`DISPLAY`、`XAUTHORITY`、`RUN_AS`、6 个
 Wayland 会话键、7 个 `SSHDESK_*` 调优键），不做任何 shell 求值；
 文件中的值会覆盖进程环境变量。`RUN_AS` 是桌面画面所属的账户，默认
-等于 SSH 登录账户本人。
+等于 SSH 登录账户本人。Wayland 会话下安装器会写入从活跃图形会话采集
+到的变量；X11 会话只写 `DISPLAY` 与 `XAUTHORITY`。完全检测不到图形
+会话（headless）时仍写入上述 X11 默认值，但会打印醒目警告并跳过桌面
+访问检查——待该用户登录图形会话后重跑 `sudo sshdesk --install` 即可。
 
 ## 控制与调优
 
@@ -211,7 +214,7 @@ Wayland 会话键、7 个 `SSHDESK_*` 调优键），不做任何 shell 求值�
 通用回退。`SSHDESK_X11_CAPTURE=auto` 依次尝试持续排干的 FFmpeg/XCB
 流、MIT-SHM、XCB。`SSHDESK_MAX_FPS` 接受 1–120。`SSHDESK_SCALE`
 接受 0.25–1.0 的固定值（慢链路可用 0.75 减少像素）或 `auto` 动态
-调整。
+调整；安装器默认写入 `1.0`（完整细节）。
 
 ## Agent 与自动化
 

@@ -91,7 +91,7 @@ SSHDESK_MOUSE=auto
 SSHDESK_UNICODE=auto
 SSHDESK_X11_CAPTURE=auto
 SSHDESK_MAX_FPS=auto
-SSHDESK_SCALE=auto
+SSHDESK_SCALE=1.0
 EOF
 sudo chown root:root /etc/sshdesk/alice.conf
 sudo chmod 0644 /etc/sshdesk/alice.conf
@@ -119,7 +119,9 @@ DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
 > 内置安装器会自动从目标用户的活跃图形会话（/proc 中属于该 uid 的
 > 合成器/会话进程环境）采集这些变量，普通 `sudo sshdesk --install`
 > 即可，无需 `sudo --preserve-env=...`；显式 `--display/--xauthority`
-> 参数 > 进程环境 > 会话采集 > 默认值。
+> 参数 > 进程环境 > 会话采集 > 默认值。未检测到任何活跃图形会话
+> （headless）时仍生成 X11 兜底配置，但会在结尾打印醒目警告并跳过
+> 桌面访问检查；待该用户登录图形会话后重跑安装器即可。
 
 ## 4. 验证后端可用性
 

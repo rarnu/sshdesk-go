@@ -108,6 +108,15 @@ func linuxInstall(d Deps, opts InstallOptions, p linuxPaths) int {
 			desktop, sessionType, account))
 	}
 
+	// A session counts as detected when any source shows a live graphical
+	// session: an explicit flag, a process DISPLAY/WAYLAND_DISPLAY, or a
+	// harvested session. Headless installs still get a working X11-default
+	// config, but skip the access check and end with a prominent warning.
+	sessionDetected := opts.Display != "" ||
+		envValue("DISPLAY") != "" ||
+		envValue("WAYLAND_DISPLAY") != "" ||
+		strings.EqualFold(envValue("XDG_SESSION_TYPE"), "wayland")
+
 	display := opts.Display
 	if display == "" {
 		display = envValue("DISPLAY")
@@ -221,6 +230,10 @@ command; missing capture or input tools are reported at the end.`,
 			return nil
 		}},
 		{"verify-access", func() error {
+			if !sessionDetected {
+				d.say(fmt.Sprintf("note: no graphical session detected for user %s; skipping the desktop access check.", account))
+				return nil
+			}
 			args := []string{"-n", "-u", runAs, "env",
 				"DISPLAY=" + display, "XAUTHORITY=" + xauthority}
 			args = append(args, sessionEnv(envValue)...)
@@ -241,6 +254,16 @@ command; missing capture or input tools are reported at the end.`,
 	d.say(fmt.Sprintf("Desktop: ssh -t %s@<server-address> desktop", account))
 	d.say(fmt.Sprintf("Plain ssh %s@<server-address> starts a standard shell.", account))
 	d.say("Remove it with: sudo sshdesk --uninstall")
+	if !sessionDetected {
+		d.say("")
+		d.say("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+		d.say(fmt.Sprintf("WARNING: no graphical session was detected for user %s.", account))
+		d.say("The desktop path will NOT work until that user logs into a")
+		d.say("graphical session. After the login, rerun:")
+		d.say("  sudo sshdesk --install")
+		d.say(fmt.Sprintf("or edit %s manually.", p.accountConfig(account)))
+		d.say("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+	}
 	return 0
 }
 

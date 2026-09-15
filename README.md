@@ -201,13 +201,18 @@ SSHDESK_MOUSE=auto
 SSHDESK_UNICODE=auto
 SSHDESK_X11_CAPTURE=auto
 SSHDESK_MAX_FPS=auto
-SSHDESK_SCALE=auto
+SSHDESK_SCALE=1.0
 ```
 
 Parsing is a fixed 16-key whitelist (`DISPLAY`, `XAUTHORITY`, `RUN_AS`, the
 six Wayland session keys, and the seven `SSHDESK_*` knobs) with no shell
 evaluation; values in the file override process environment variables.
 `RUN_AS` is the desktop-owning account and defaults to the SSH account itself.
+On Wayland the installer records the variables it harvested from the active
+graphical session; on X11 only `DISPLAY` and `XAUTHORITY` are written. When
+no graphical session is active at all, the installer still writes these X11
+defaults, prints a prominent warning, and skips the desktop access check —
+rerun `sudo sshdesk --install` after the user logs into a graphical session.
 
 ## Controls and tuning
 
@@ -225,7 +230,8 @@ behind. `SSHDESK_RENDER=kitty` requires Kitty graphics; `ansi` forces the
 universal fallback. `SSHDESK_X11_CAPTURE=auto` tries a continuously drained
 FFmpeg/XCB stream, then MIT-SHM, then XCB. `SSHDESK_MAX_FPS` accepts 1–120.
 `SSHDESK_SCALE` accepts fixed values from 0.25–1.0 (0.75 sends fewer pixels on
-slow links) or `auto` for dynamic adjustment.
+slow links) or `auto` for dynamic adjustment; the installer writes `1.0` (full
+detail) as the default.
 
 ## Agents and automation
 

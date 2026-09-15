@@ -53,10 +53,19 @@ var waylandKeys = []string{
 	"XDG_CURRENT_DESKTOP", "DBUS_SESSION_BUS_ADDRESS", "YDOTOOL_SOCKET",
 }
 
-// sshdeskDefaults are written with the value auto.
+// sshdeskDefaults are written with the value auto, except SSHDESK_SCALE,
+// which installs as 1.0 (full detail; auto stays available for hand edits).
 var sshdeskDefaults = []string{
 	"SSHDESK_RENDER", "SSHDESK_COLOR", "SSHDESK_MOUSE", "SSHDESK_UNICODE",
 	"SSHDESK_X11_CAPTURE", "SSHDESK_MAX_FPS", "SSHDESK_SCALE",
+}
+
+// sshdeskDefaultValue returns the installed default for a SSHDESK_* key.
+func sshdeskDefaultValue(key string) string {
+	if key == "SSHDESK_SCALE" {
+		return "1.0"
+	}
+	return "auto"
 }
 
 // envKeepKeys is the sudoers env_keep whitelist.
@@ -201,8 +210,8 @@ func DetectUser(getenv func(string) string, logname func() (string, error)) (str
 	return user, nil
 }
 
-// RenderConfig renders /etc/sshdesk/<account>.conf exactly as the former
-// install-server.sh wrote it.
+// RenderConfig renders /etc/sshdesk/<account>.conf. Wayland session keys are
+// included only when non-empty, so X11 and headless installs stay clean.
 func RenderConfig(display, xauthority, runAs string, getenv func(string) string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "DISPLAY=%s\n", display)
@@ -214,7 +223,7 @@ func RenderConfig(display, xauthority, runAs string, getenv func(string) string)
 		}
 	}
 	for _, key := range sshdeskDefaults {
-		fmt.Fprintf(&b, "%s=auto\n", key)
+		fmt.Fprintf(&b, "%s=%s\n", key, sshdeskDefaultValue(key))
 	}
 	return b.String()
 }

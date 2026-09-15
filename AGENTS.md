@@ -135,7 +135,12 @@ go build -o sshdesk ./cmd/sshdesk
   含 WAYLAND_DISPLAY+XDG_RUNTIME_DIR 的进程环境中提取 7 个会话键；
   sessionenv_linux.go 提供真实 procOwnerUid；Deps.HarvestSession 仅
   Linux 接线。采集到 Wayland 会话会打印一行说明，gnome/kde/wlroots 家族
-  判定（ydotoold 配置与依赖体检）同样使用采集结果
+  判定（ydotoold 配置与依赖体检）同样使用采集结果。会话检测
+  （sessionDetected = 显式 flag 或 env/采集的 DISPLAY、WAYLAND_DISPLAY、
+  wayland 类型）决定是否跑 verify-access 的 --check：headless 时仍写
+  X11 兜底 conf，跳过检查并在结尾打印醒目警告（提示登录图形会话后重跑
+  或手工编辑 conf）。安装生成 conf 的 SSHDESK_SCALE 默认 1.0（其余
+  SSHDESK_* 为 auto；程序内建 auto 语义不变，手工改回 auto 仍可用）
 - `cmd/sshdesk`：单一二进制，argv[0] busybox 式分发（9 个命令名）+
   server/local/forced-command/agent/agent-ssh/remote/split/bench/
   install/uninstall 子命令；

@@ -80,6 +80,17 @@
 
 ### Changed
 
+- Linux install is now session-aware end to end. Wayland sessions record the
+  harvested variables verbatim (no forced `DISPLAY=:0`); X11 sessions write
+  only `DISPLAY` and `XAUTHORITY`; and with no active graphical session at
+  all the installer still writes the X11 defaults but prints a prominent
+  warning (desktop path unavailable until the user logs into a graphical
+  session, then rerun `sudo sshdesk --install` or edit the config) and skips
+  the verify-access `--check`, which could only fail. The access check
+  environment is guaranteed identical to the generated config.
+- Installed configs now default `SSHDESK_SCALE=1.0` (full detail) instead of
+  `auto`; the in-program `auto` semantics are unchanged and remain available
+  for hand edits.
 - The Go module path is now `github.com/rarnu/sshdesk-go`.
 - Installer completion hints now point at the explicit desktop selector
   (`ssh -t <user>@<server> desktop`) and note that a plain `ssh` starts a
