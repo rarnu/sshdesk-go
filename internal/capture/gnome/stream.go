@@ -2,6 +2,7 @@ package gnome
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os/exec"
@@ -16,7 +17,17 @@ const (
 	stderrChunk      = 256
 	stderrChunksKept = 8
 	stderrDetailMax  = 2048
+
+	// streamBufferCount keeps three frame buffers in circulation: one the
+	// drain goroutine reads into, one published as the latest frame, and
+	// one handed out to the caller of Capture.
+	streamBufferCount = 3
 )
+
+// frameWaitTimeout bounds how long Capture waits for a fresh frame from an
+// idle pipeline, matching the Python appsink try-pull-sample timeout. It is
+// a package variable so tests can shrink it.
+var frameWaitTimeout = 2 * time.Second
 
 // CommandLine is the fixed gst-launch argument vector (never a shell),
 // replacing the Python appsink pipeline with a continuous fdsink stream.
@@ -51,20 +62,38 @@ type frameStream interface {
 }
 
 // streamCapture mirrors the ffmpeg process management: a lazily started
-// gst-launch child writes scaled RGB24 frames to stdout while a drain
-// goroutine keeps stderr from blocking.
+// gst-launch child writes scaled RGB24 frames to stdout. A drain goroutine
+// reads the pipe continuously so the child never blocks on a full pipe and
+// publishes only the newest frame, like the appsink max-buffers=1 drop=true
+// queue it replaces; Capture waits for a frame it has not handed out yet.
+//
+// Buffer lifetime: frame buffers cycle through freeBuf -> drain -> latest
+// -> outstanding (owned by the Capture caller) -> freeBuf. A returned frame
+// stays valid until the caller's next Capture.
 type streamCapture struct {
 	executable   string
 	node         uint32
 	targetWidth  int
 	targetHeight int
 
-	process      *exec.Cmd
-	stdout       io.ReadCloser
-	stderrPipe   io.ReadCloser
-	buffer       []byte
-	waitDone     chan struct{}
-	stderrDone   chan struct{}
+	mu          sync.Mutex
+	process     *exec.Cmd
+	stdout      io.ReadCloser
+	stderrPipe  io.ReadCloser
+	waitDone    chan struct{}
+	stderrDone  chan struct{}
+	drainStop   chan struct{}
+	drainDone   chan struct{}
+	frameCh     chan struct{}
+	freeBuf     chan []byte
+	draining    bool
+	stopped     bool
+	latest      streamFrame
+	seq         uint64
+	consumed    uint64
+	outstanding []byte
+	drainErr    error
+
 	stderrMu     sync.Mutex
 	stderrChunks [][]byte
 }
@@ -78,10 +107,33 @@ func newStreamCapture(executable string, node uint32, width, height int) *stream
 	}
 }
 
-func (s *streamCapture) start() error {
-	if s.process != nil {
-		return nil
+// ensureChannels lazily creates the coordination channels and seeds the
+// buffer pool; tests attach pipes to a literal streamCapture that never saw
+// newStreamCapture. Call with s.mu held.
+func (s *streamCapture) ensureChannels() {
+	if s.frameCh != nil {
+		return
 	}
+	s.frameCh = make(chan struct{}, 1)
+	s.drainStop = make(chan struct{})
+	s.drainDone = make(chan struct{})
+	s.freeBuf = make(chan []byte, streamBufferCount)
+	if size := s.targetWidth * s.targetHeight * 3; size > 0 {
+		for i := 0; i < streamBufferCount; i++ {
+			s.freeBuf <- make([]byte, size)
+		}
+	}
+}
+
+// signal wakes a waiting Capture without blocking the drain.
+func signalFrame(frameCh chan<- struct{}) {
+	select {
+	case frameCh <- struct{}{}:
+	default:
+	}
+}
+
+func (s *streamCapture) start() error {
 	argv := CommandLine(s.executable, s.node, s.targetWidth, s.targetHeight)
 	command := exec.Command(argv[0], argv[1:]...)
 	stdout, err := command.StdoutPipe()
@@ -95,22 +147,107 @@ func (s *streamCapture) start() error {
 	if err := command.Start(); err != nil {
 		return fmt.Errorf("could not create the GNOME capture pipeline: %v", err)
 	}
+	waitDone := make(chan struct{})
+	stderrDone := make(chan struct{})
+	s.mu.Lock()
+	if s.stopped {
+		s.mu.Unlock()
+		stdout.Close()
+		_ = command.Process.Kill()
+		_ = command.Wait()
+		return errors.New("the pipeline stopped")
+	}
+	s.ensureChannels()
 	s.process = command
 	s.stdout = stdout
 	s.stderrPipe = stderrPipe
+	s.waitDone = waitDone
+	s.stderrDone = stderrDone
+	s.draining = true
 	s.stderrMu.Lock()
 	s.stderrChunks = nil
 	s.stderrMu.Unlock()
-	waitDone := make(chan struct{})
-	s.waitDone = waitDone
+	s.mu.Unlock()
 	go func() {
 		command.Wait()
 		close(waitDone)
 	}()
-	s.stderrDone = make(chan struct{})
-	go s.drainStderr(stderrPipe, s.stderrDone)
-	s.buffer = make([]byte, s.targetWidth*s.targetHeight*3)
+	go s.drainStderr(stderrPipe, stderrDone)
+	go s.drainFrames(stdout)
 	return nil
+}
+
+// ensureStarted spawns the child on first use and launches the drain
+// goroutine for pre-attached test pipes.
+func (s *streamCapture) ensureStarted() error {
+	s.mu.Lock()
+	if s.stopped {
+		drainErr := s.drainErr
+		s.mu.Unlock()
+		if drainErr != nil {
+			return drainErr
+		}
+		return errors.New("the pipeline stopped")
+	}
+	s.ensureChannels()
+	if s.process != nil {
+		s.mu.Unlock()
+		return nil
+	}
+	if s.stdout != nil {
+		// Test seam: a pre-attached pipe without a child process.
+		if !s.draining {
+			s.draining = true
+			stdout := s.stdout
+			s.mu.Unlock()
+			go s.drainFrames(stdout)
+			return nil
+		}
+		s.mu.Unlock()
+		return nil
+	}
+	s.mu.Unlock()
+	return s.start()
+}
+
+// drainFrames reads frames back to back and publishes the newest one. An
+// EOF or short read ends the stream; the pipe closing underneath a blocked
+// read is how stop releases the goroutine.
+func (s *streamCapture) drainFrames(stdout io.Reader) {
+	frameCh := s.frameCh
+	freeBuf := s.freeBuf
+	drainStop := s.drainStop
+	defer close(s.drainDone)
+	for {
+		var buf []byte
+		select {
+		case buf = <-freeBuf:
+		case <-drainStop:
+			return
+		}
+		if _, err := io.ReadFull(stdout, buf); err != nil {
+			s.mu.Lock()
+			if s.drainErr == nil {
+				if detail := s.stderrDetail(); detail != "" {
+					s.drainErr = fmt.Errorf("stream ended: %s", detail)
+				} else {
+					s.drainErr = errors.New("stream ended")
+				}
+			}
+			s.mu.Unlock()
+			signalFrame(frameCh)
+			return
+		}
+		s.mu.Lock()
+		old := s.latest
+		s.latest = streamFrame{RGB: buf, CapturedNs: time.Now().UnixNano()}
+		s.seq++
+		s.mu.Unlock()
+		if old.RGB != nil {
+			freeBuf <- old.RGB
+		}
+		signalFrame(frameCh)
+	}
 }
 
 // drainStderr keeps the pipe empty and retains the tail for error reports.
@@ -148,51 +285,91 @@ func (s *streamCapture) stderrDetail() string {
 	return string(bytes.TrimSpace(bytes.ToValidUTF8(joined, []byte("�"))))
 }
 
-// Capture reads exactly one frame; an EOF or short read ends the stream.
+// Capture waits for the next frame the caller has not seen yet, like
+// try-pull-sample against a drop=true appsink queue. The returned buffer is
+// recycled by the next Capture call. A stream that produces nothing for
+// frameWaitTimeout reports the Python appsink timeout error.
 func (s *streamCapture) Capture() (streamFrame, error) {
-	if s.process == nil && s.stdout == nil {
-		if err := s.start(); err != nil {
-			return streamFrame{}, err
+	if err := s.ensureStarted(); err != nil {
+		return streamFrame{}, err
+	}
+	timer := time.NewTimer(frameWaitTimeout)
+	defer timer.Stop()
+	for {
+		s.mu.Lock()
+		if s.seq > s.consumed {
+			frame := s.latest
+			frame.ContentDigest = capture.DigestPixels(frame.RGB)
+			s.latest = streamFrame{}
+			s.consumed = s.seq
+			if s.outstanding != nil {
+				s.freeBuf <- s.outstanding
+			}
+			s.outstanding = frame.RGB
+			s.mu.Unlock()
+			return frame, nil
+		}
+		drainErr := s.drainErr
+		s.mu.Unlock()
+		if drainErr != nil {
+			s.stop()
+			return streamFrame{}, drainErr
+		}
+		s.mu.Lock()
+		frameCh := s.frameCh
+		stopped := s.stopped
+		s.mu.Unlock()
+		if stopped {
+			return streamFrame{}, errors.New("the pipeline stopped")
+		}
+		select {
+		case <-frameCh:
+		case <-timer.C:
+			return streamFrame{}, errors.New("no frame arrived within 2 seconds")
 		}
 	}
-	if s.stdout == nil {
-		return streamFrame{}, fmt.Errorf("the pipeline stopped")
-	}
-	if _, err := io.ReadFull(s.stdout, s.buffer); err != nil {
-		s.stop()
-		if detail := s.stderrDetail(); detail != "" {
-			return streamFrame{}, fmt.Errorf("stream ended: %s", detail)
-		}
-		return streamFrame{}, fmt.Errorf("stream ended")
-	}
-	rgb := make([]byte, len(s.buffer))
-	copy(rgb, s.buffer)
-	return streamFrame{
-		RGB:           rgb,
-		CapturedNs:    time.Now().UnixNano(),
-		ContentDigest: capture.DigestPixels(rgb),
-	}, nil
 }
 
 func (s *streamCapture) stop() {
+	s.mu.Lock()
+	if s.stopped {
+		s.mu.Unlock()
+		return
+	}
+	s.stopped = true
+	if s.drainErr == nil {
+		s.drainErr = errors.New("stream ended")
+	}
+	if s.drainStop != nil {
+		close(s.drainStop)
+	}
 	process := s.process
 	stdout := s.stdout
 	waitDone := s.waitDone
 	stderrDone := s.stderrDone
+	draining := s.draining
+	drainDone := s.drainDone
+	frameCh := s.frameCh
 	s.process = nil
 	s.stdout = nil
 	s.stderrPipe = nil
 	s.waitDone = nil
 	s.stderrDone = nil
-	s.buffer = nil
-	if process == nil {
-		if stdout != nil {
-			stdout.Close()
-		}
-		return
+	s.mu.Unlock()
+	if frameCh != nil {
+		signalFrame(frameCh)
 	}
 	if stdout != nil {
 		stdout.Close()
+	}
+	if draining && drainDone != nil {
+		select {
+		case <-drainDone:
+		case <-time.After(time.Second):
+		}
+	}
+	if process == nil {
+		return
 	}
 	select {
 	case <-waitDone:

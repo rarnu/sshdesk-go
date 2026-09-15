@@ -276,21 +276,31 @@ func (c *Capture) stopStream() {
 }
 
 // Capture reads one frame, rebuilding the stream once after a failure like
-// the Python attempt loop.
+// the Python attempt loop. The frame wait runs without c.mu: the pipeline
+// may stay idle for seconds on a static desktop, and cursor updates plus
+// Close must stay responsive meanwhile.
 func (c *Capture) Capture() (*capture.Frame, error) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	if c.closed {
+		c.mu.Unlock()
 		return nil, errors.New("GNOME capture is closed")
 	}
 	var frame streamFrame
 	var firstError error
 	for attempt := 0; attempt < 2; attempt++ {
 		if err := c.startStream(); err != nil {
+			c.mu.Unlock()
 			return nil, err
 		}
+		stream := c.stream
+		c.mu.Unlock()
 		var err error
-		frame, err = c.stream.Capture()
+		frame, err = stream.Capture()
+		c.mu.Lock()
+		if c.closed {
+			c.mu.Unlock()
+			return nil, errors.New("GNOME capture is closed")
+		}
 		if err == nil {
 			break
 		}
@@ -303,19 +313,23 @@ func (c *Capture) Capture() (*capture.Frame, error) {
 			c.stopStream()
 		}
 		if attempt == 1 {
+			c.mu.Unlock()
 			return nil, fmt.Errorf("GNOME PipeWire capture failed: %v", firstError)
 		}
 	}
-	img := rgb24ToRGBA(frame.RGB, c.desktopWidth, c.desktopHeight)
-	if c.targetWidth > 0 && c.targetHeight > 0 &&
-		(c.targetWidth != c.desktopWidth || c.targetHeight != c.desktopHeight) {
-		img = xshm.Scale(img, c.targetWidth, c.targetHeight)
+	desktopWidth, desktopHeight := c.desktopWidth, c.desktopHeight
+	targetWidth, targetHeight := c.targetWidth, c.targetHeight
+	c.mu.Unlock()
+	img := rgb24ToRGBA(frame.RGB, desktopWidth, desktopHeight)
+	if targetWidth > 0 && targetHeight > 0 &&
+		(targetWidth != desktopWidth || targetHeight != desktopHeight) {
+		img = xshm.Scale(img, targetWidth, targetHeight)
 	}
 	return &capture.Frame{
 		Image:         img,
 		CapturedNs:    frame.CapturedNs,
-		DesktopWidth:  c.desktopWidth,
-		DesktopHeight: c.desktopHeight,
+		DesktopWidth:  desktopWidth,
+		DesktopHeight: desktopHeight,
 		ContentDigest: frame.ContentDigest,
 	}, nil
 }

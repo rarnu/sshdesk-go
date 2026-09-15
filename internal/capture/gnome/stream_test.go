@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestCommandLineMatchesSpec(t *testing.T) {
@@ -30,9 +31,11 @@ func TestCommandLineMatchesSpec(t *testing.T) {
 }
 
 func TestStreamCaptureReportsStderrAfterStreamEnds(t *testing.T) {
-	s := &streamCapture{}
-	s.stdout = io.NopCloser(bytes.NewReader(nil))
-	s.buffer = make([]byte, 10)
+	s := &streamCapture{
+		stdout:       io.NopCloser(bytes.NewReader(nil)),
+		targetWidth:  5,
+		targetHeight: 2,
+	}
 	s.stderrChunks = [][]byte{[]byte("capturer error")}
 
 	_, err := s.Capture()
@@ -46,9 +49,11 @@ func TestStreamCaptureReportsStderrAfterStreamEnds(t *testing.T) {
 
 func TestStreamCaptureReadsOneFrame(t *testing.T) {
 	pixels := bytes.Repeat([]byte{7, 8, 9}, 6)
-	s := &streamCapture{}
-	s.stdout = io.NopCloser(bytes.NewReader(pixels))
-	s.buffer = make([]byte, len(pixels))
+	s := &streamCapture{
+		stdout:       io.NopCloser(bytes.NewReader(pixels)),
+		targetWidth:  6,
+		targetHeight: 1,
+	}
 
 	frame, err := s.Capture()
 	if err != nil {
@@ -60,6 +65,63 @@ func TestStreamCaptureReadsOneFrame(t *testing.T) {
 	if len(frame.ContentDigest) != 8 || frame.CapturedNs == 0 {
 		t.Fatal("Capture() did not digest and stamp the frame")
 	}
+	if _, err := s.Capture(); err == nil || err.Error() != "stream ended" {
+		t.Fatalf("second Capture() error = %v, want the stream end", err)
+	}
+}
+
+func TestStreamCaptureReturnsLatestFrame(t *testing.T) {
+	stale := bytes.Repeat([]byte{1, 2, 3}, 8)
+	fresh := bytes.Repeat([]byte{4, 5, 6}, 8)
+	payload := append(bytes.Clone(stale), fresh...)
+	s := &streamCapture{
+		stdout:       io.NopCloser(bytes.NewReader(payload)),
+		targetWidth:  8,
+		targetHeight: 1,
+	}
+	if err := s.ensureStarted(); err != nil {
+		t.Fatalf("ensureStarted() error = %v", err)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		s.mu.Lock()
+		seq := s.seq
+		s.mu.Unlock()
+		if seq >= 2 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the drain goroutine did not consume both frames")
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	frame, err := s.Capture()
+	if err != nil {
+		t.Fatalf("Capture() error = %v", err)
+	}
+	if !bytes.Equal(frame.RGB, fresh) {
+		t.Fatalf("Capture() pixels = %v, want the latest frame %v", frame.RGB, fresh)
+	}
+}
+
+func TestStreamCaptureTimesOutWithoutFrames(t *testing.T) {
+	restore := frameWaitTimeout
+	frameWaitTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { frameWaitTimeout = restore })
+
+	reader, writer := io.Pipe()
+	defer writer.Close()
+	s := &streamCapture{
+		stdout:       reader,
+		targetWidth:  4,
+		targetHeight: 2,
+	}
+	_, err := s.Capture()
+	if err == nil || err.Error() != "no frame arrived within 2 seconds" {
+		t.Fatalf("Capture() error = %v, want the appsink timeout", err)
+	}
+	s.Close()
 }
 
 func TestStreamDrainKeepsTail(t *testing.T) {
