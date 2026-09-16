@@ -123,16 +123,23 @@ go build -o sshdesk ./cmd/sshdesk
   Confirm/OnStep 等），Linux/macOS 全流程用假 Deps + tempdir 在任意主机
   单测。linux.go/darwin.go 无构建标签（可移植），windows.go 为
   `//go:build windows`（x/sys/windows/registry 写 PATH、IsElevated 判
-  管理员、netsh 防火墙、sc.exe/powershell 服务）。Linux 卸载顺序：sshd
+  管理员、netsh 防火墙、sc.exe/powershell 服务）。Deps.RunQuiet（可选
+  seam，nil 回退 Run）用于静默探测——reloadOpenSSH 先用
+  `systemctl cat` 静默探测 ssh.service（Debian）/sshd.service（Arch、
+  Fedora）哪个存在，只对存在的单元 enable+reload，避免缺失单元的报错
+  吓到用户。Linux 卸载顺序：sshd
   片段 → sshd -t → reload → sudoers → 配置（--keep-config 保留）→ 二进制
   （ownsCommandPath 归属验证，外来文件保留）→ ydotoold；绝不动 OpenSSH
   本体与 Include 行。安装器不下载任何内容、不装系统包，缺失依赖只警告
   并按 apt/dnf/pacman 打印建议包名。Linux 写配置前的会话变量解析优先级：
   显式 flag > 进程环境 > /proc 采集 > 默认值——sessionenv.go（无标签，
   scanSessionProc 接受 root 与 ownerOf seam，可用假 /proc 树单测）扫描
-  /proc 数字目录，按属主 uid 过滤，在合成器进程（gnome-shell/plasmashell/
-  sway/hyprland/weston/wayfire/labwc/river/kwin_wayland，优先）或任何同时
-  含 WAYLAND_DISPLAY+XDG_RUNTIME_DIR 的进程环境中提取 7 个会话键；
+  /proc 数字目录，按属主 uid 过滤，在合成器/WM 进程（Wayland：
+  gnome-shell/plasmashell/sway/hyprland/weston/wayfire/labwc/river/niri/
+  kwin_wayland；X11：cinnamon/muffin/kwin_x11/xfwm4/openbox/i3/mutter
+  等，优先）或任何含 XDG_RUNTIME_DIR 且带 WAYLAND_DISPLAY 或本地
+  DISPLAY 的进程环境中提取 7 个会话键（ssh X11 转发的 localhost:N.M
+  DISPLAY 不算本地会话，也不会采入配置）；
   sessionenv_linux.go 提供真实 procOwnerUid；Deps.HarvestSession 仅
   Linux 接线。采集到 Wayland 会话会打印一行说明，gnome/kde/wlroots 家族
   判定（ydotoold 配置与依赖体检）同样使用采集结果。会话检测

@@ -73,6 +73,9 @@ func unixDeps(stdout, stderr io.Writer) Deps {
 		command.Stderr = d.Stderr
 		return command.Run()
 	}
+	d.RunQuiet = func(name string, args ...string) error {
+		return exec.Command(name, args...).Run()
+	}
 	return d
 }
 

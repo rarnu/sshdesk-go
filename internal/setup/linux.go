@@ -516,11 +516,10 @@ func configureUnixSshd(d Deps, sshdConfig, sshdConfigDir, snippetPath, snippet, 
 // start_openssh fallback chain.
 func reloadOpenSSH(d Deps) error {
 	if _, err := d.LookPath("systemctl"); err == nil {
-		if err := d.Run("systemctl", "enable", "--now", "ssh.service"); err == nil {
-			return d.Run("systemctl", "reload", "ssh.service")
-		}
-		if err := d.Run("systemctl", "enable", "--now", "sshd.service"); err == nil {
-			return d.Run("systemctl", "reload", "sshd.service")
+		for _, unit := range sshServiceUnits(d) {
+			if err := d.Run("systemctl", "enable", "--now", unit); err == nil {
+				return d.Run("systemctl", "reload", unit)
+			}
 		}
 	}
 	if _, err := d.LookPath("service"); err == nil {
@@ -532,6 +531,28 @@ func reloadOpenSSH(d Deps) error {
 		}
 	}
 	return errors.New("OpenSSH is configured, but its service could not be started")
+}
+
+// sshServiceUnits orders the OpenSSH unit names (ssh.service on Debian,
+// sshd.service on Arch and Fedora) by what actually exists on the system.
+// Existing units are probed quietly with systemctl cat so a missing unit
+// does not print a scary error; without the quiet seam the legacy order is
+// kept.
+func sshServiceUnits(d Deps) []string {
+	legacy := []string{"ssh.service", "sshd.service"}
+	if d.RunQuiet == nil {
+		return legacy
+	}
+	var existing []string
+	for _, unit := range legacy {
+		if d.RunQuiet("systemctl", "cat", unit) == nil {
+			existing = append(existing, unit)
+		}
+	}
+	if len(existing) == 0 {
+		return legacy
+	}
+	return existing
 }
 
 // setupYdotoold configures the sandboxed ydotoold service for non-GNOME

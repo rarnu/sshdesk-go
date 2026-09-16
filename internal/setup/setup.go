@@ -94,8 +94,11 @@ type Deps struct {
 	SelfPath    func() (string, error)
 	LookPath    func(string) (string, error)
 	Run         func(name string, args ...string) error
-	Chown       func(name string, uid, gid int) error
-	Confirm     func(plan string) bool
+	// RunQuiet, when set, runs a command with its output discarded; used for
+	// probes whose failure must not alarm the user. Nil falls back to Run.
+	RunQuiet func(name string, args ...string) error
+	Chown    func(name string, uid, gid int) error
+	Confirm  func(plan string) bool
 	// HarvestSession, when set, collects graphical-session variables from the
 	// target account's running processes (Linux /proc); nil elsewhere.
 	HarvestSession func(uid int) map[string]string

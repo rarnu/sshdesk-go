@@ -643,3 +643,52 @@ func TestLinuxInstallVerifyEnvMatchesConfig(t *testing.T) {
 		t.Errorf("verify-access environment diverges from the config:\nwant: %s\nruns:\n%s", want, joined)
 	}
 }
+
+func TestSSHServiceUnits(t *testing.T) {
+	// Without the quiet seam the legacy Debian-first order is kept.
+	if got := sshServiceUnits(Deps{}); got[0] != "ssh.service" || len(got) != 2 {
+		t.Errorf("legacy order = %v", got)
+	}
+	// A missing ssh.service (Arch/Fedora) is probed quietly and skipped.
+	d := Deps{RunQuiet: func(name string, args ...string) error {
+		if len(args) == 2 && args[0] == "cat" && args[1] == "ssh.service" {
+			return errors.New("unit not found")
+		}
+		return nil
+	}}
+	got := sshServiceUnits(d)
+	if len(got) != 1 || got[0] != "sshd.service" {
+		t.Errorf("probed units = %v, want [sshd.service]", got)
+	}
+	// When every probe fails the legacy attempts are kept as a fallback.
+	d.RunQuiet = func(string, ...string) error { return errors.New("no systemd") }
+	if got := sshServiceUnits(d); got[0] != "ssh.service" || len(got) != 2 {
+		t.Errorf("fallback order = %v", got)
+	}
+}
+
+func TestReloadOpenSSHPicksExistingUnit(t *testing.T) {
+	f := newLinuxFixture(t)
+	var quiet []string
+	f.deps.RunQuiet = func(name string, args ...string) error {
+		quiet = append(quiet, name+" "+strings.Join(args, " "))
+		if len(args) == 2 && args[0] == "cat" && args[1] == "ssh.service" {
+			return errors.New("Unit ssh.service does not exist")
+		}
+		return nil
+	}
+	if err := reloadOpenSSH(f.deps); err != nil {
+		t.Fatalf("reloadOpenSSH = %v", err)
+	}
+	joined := strings.Join(f.runs, "\n")
+	if strings.Contains(joined, "ssh.service") {
+		t.Errorf("the missing unit must not be touched:\n%s", joined)
+	}
+	if !strings.Contains(joined, "systemctl enable --now sshd.service") ||
+		!strings.Contains(joined, "systemctl reload sshd.service") {
+		t.Errorf("sshd.service was not enabled and reloaded:\n%s", joined)
+	}
+	if len(quiet) == 0 {
+		t.Error("units were not probed quietly")
+	}
+}

@@ -141,14 +141,52 @@ func TestScanSessionProcFiltersByOwner(t *testing.T) {
 	}
 }
 
-func TestScanSessionProcRequiresWaylandAndRuntimeDir(t *testing.T) {
+func TestScanSessionProcAcceptsX11Session(t *testing.T) {
 	root, ownerOf := writeFakeProc(t, map[string]fakeProc{
-		// X-only process: not a Wayland session candidate.
-		"100": {uid: 1000, comm: "gnome-shell", environ: environ(
-			"DISPLAY", ":0", "XDG_RUNTIME_DIR", "/run/user/1000")},
-		// Wayland display without a runtime directory: incomplete.
+		// X11-only desktop (Cinnamon via lightdm): no WAYLAND_DISPLAY anywhere.
+		"100": {uid: 1000, comm: "cinnamon", environ: environ(
+			"DISPLAY", ":0",
+			"XDG_RUNTIME_DIR", "/run/user/1000",
+			"XDG_SESSION_TYPE", "x11",
+			"XDG_CURRENT_DESKTOP", "X-Cinnamon",
+			"XAUTHORITY", "/home/rarnu/.Xauthority")},
+	})
+	got := scanSessionProc(root, 1000, ownerOf)
+	if got["DISPLAY"] != ":0" || got["XDG_SESSION_TYPE"] != "x11" ||
+		got["XDG_CURRENT_DESKTOP"] != "X-Cinnamon" ||
+		got["XAUTHORITY"] != "/home/rarnu/.Xauthority" {
+		t.Fatalf("X11 session must be harvested: %v", got)
+	}
+}
+
+func TestScanSessionProcSkipsForwardedDisplay(t *testing.T) {
+	root, ownerOf := writeFakeProc(t, map[string]fakeProc{
+		// ssh X11 forwarding: localhost displays do not mark a local session.
+		"100": {uid: 1000, comm: "bash", environ: environ(
+			"DISPLAY", "localhost:10.0", "XDG_RUNTIME_DIR", "/run/user/1000")},
+		// A forwarded DISPLAY must not leak into the harvest either.
 		"200": {uid: 1000, comm: "sway", environ: environ(
+			"WAYLAND_DISPLAY", "wayland-0",
+			"XDG_RUNTIME_DIR", "/run/user/1000",
+			"DISPLAY", "localhost:11.0")},
+	})
+	got := scanSessionProc(root, 1000, ownerOf)
+	if got["WAYLAND_DISPLAY"] != "wayland-0" {
+		t.Fatalf("wayland compositor must win: %v", got)
+	}
+	if _, ok := got["DISPLAY"]; ok {
+		t.Errorf("forwarded DISPLAY must be dropped from the harvest: %v", got)
+	}
+}
+
+func TestScanSessionProcRequiresDisplayAndRuntimeDir(t *testing.T) {
+	root, ownerOf := writeFakeProc(t, map[string]fakeProc{
+		// Wayland display without a runtime directory: incomplete.
+		"100": {uid: 1000, comm: "sway", environ: environ(
 			"WAYLAND_DISPLAY", "wayland-0")},
+		// Runtime directory without any display: not graphical.
+		"200": {uid: 1000, comm: "systemd", environ: environ(
+			"XDG_RUNTIME_DIR", "/run/user/1000")},
 	})
 	if got := scanSessionProc(root, 1000, ownerOf); got != nil {
 		t.Fatalf("incomplete candidates must be skipped: %v", got)

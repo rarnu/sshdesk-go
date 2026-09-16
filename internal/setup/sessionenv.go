@@ -8,9 +8,11 @@ import (
 )
 
 // compositorNames are the process names (from /proc/<pid>/comm) considered
-// compositors or session leaders. When several processes owned by the target
-// account carry a graphical environment, a compositor's environment wins.
+// compositors or session leaders, Wayland and X11 alike. When several
+// processes owned by the target account carry a graphical environment, a
+// compositor's environment wins.
 var compositorNames = map[string]bool{
+	// Wayland compositors.
 	"gnome-shell":  true,
 	"plasmashell":  true,
 	"sway":         true,
@@ -20,7 +22,27 @@ var compositorNames = map[string]bool{
 	"wayfire":      true,
 	"labwc":        true,
 	"river":        true,
+	"niri":         true,
 	"kwin_wayland": true,
+	// X11 window managers and desktop shells.
+	"cinnamon":      true,
+	"muffin":        true,
+	"kwin_x11":      true,
+	"xfwm4":         true,
+	"openbox":       true,
+	"i3":            true,
+	"mutter":        true,
+	"marco":         true,
+	"awesome":       true,
+	"qtile":         true,
+	"bspwm":         true,
+	"dwm":           true,
+	"xmonad":        true,
+	"herbstluftwm":  true,
+	"icewm":         true,
+	"fluxbox":       true,
+	"budgie-wm":     true,
+	"enlightenment": true,
 }
 
 // harvestKeys are the variables extracted from the session process
@@ -61,9 +83,11 @@ func extractSessionEnv(env map[string]string) map[string]string {
 
 // scanSessionProc walks a /proc-like tree and collects the graphical session
 // environment of processes owned by uid. A process is a candidate when its
-// environ holds both WAYLAND_DISPLAY and XDG_RUNTIME_DIR; compositor
-// processes are preferred over generic candidates. ownerOf reports the
-// numeric owner of a process directory and is the platform seam (the real
+// environ holds XDG_RUNTIME_DIR plus either WAYLAND_DISPLAY or a local
+// DISPLAY; compositor processes are preferred over generic candidates.
+// Forwarded X11 displays (localhost:N.M, set by ssh X11 forwarding) do not
+// count: they only exist inside someone else's ssh session. ownerOf reports
+// the numeric owner of a process directory and is the platform seam (the real
 // one lives in sessionenv_linux.go); root points at the tree to scan so
 // tests can pass a fake /proc.
 func scanSessionProc(root string, uid int, ownerOf func(os.FileInfo) (int, bool)) map[string]string {
@@ -92,7 +116,16 @@ func scanSessionProc(root string, uid int, ownerOf func(os.FileInfo) (int, bool)
 			continue
 		}
 		env := parseEnviron(data)
-		if env["WAYLAND_DISPLAY"] == "" || env["XDG_RUNTIME_DIR"] == "" {
+		if env["XDG_RUNTIME_DIR"] == "" {
+			continue
+		}
+		display := env["DISPLAY"]
+		if strings.HasPrefix(display, "localhost:") {
+			// ssh X11 forwarding; not a local session.
+			display = ""
+			env["DISPLAY"] = ""
+		}
+		if env["WAYLAND_DISPLAY"] == "" && display == "" {
 			continue
 		}
 		comm, _ := os.ReadFile(filepath.Join(root, entry.Name(), "comm"))
