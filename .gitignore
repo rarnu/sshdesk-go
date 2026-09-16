@@ -32,3 +32,6 @@ go.work.sum
 # .idea/
 # .vscode/
 /sshdesk-linux-*
+/sshdesk-darwin-*
+/sshdesk-windows-*
+/dist/

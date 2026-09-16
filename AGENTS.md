@@ -24,6 +24,14 @@ GOOS=linux GOARCH=arm64 go build ./...
 GOOS=windows GOARCH=amd64 go build ./...
 ```
 
+发布用六目标编译脚本 `scripts/build.sh [OUTDIR] [targets...]`（默认
+dist/ 下全部六个：windows/linux/darwin × amd64/arm64，产物名
+`sshdesk-<os>-<arch>[.exe]`，`-trimpath -ldflags="-s -w"`）。darwin 目标
+只能在 macOS 主机上构建（native 后端用 cgo Quartz），linux/windows 目标
+任意主机 CGO_ENABLED=0 可编。CI（.github/workflows/test.yml 的 build
+job）按此分工：ubuntu runner 出 linux+windows 四件，macos runner 出
+darwin 两件，均上传 artifact。
+
 手工冒烟（二进制名必须是 `sshdesk`，argv[0] 分发只认
 `sshdesk` / `sshdesk-server` / `sshdesk-local` 等 9 个命令名）：
 

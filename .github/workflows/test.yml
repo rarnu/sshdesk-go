@@ -29,3 +29,27 @@ jobs:
           go-version: "1.27"
       - run: go build ./...
       - run: go test ./...
+
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          # linux/windows cross-compile anywhere with CGO_ENABLED=0;
+          # darwin needs the macOS runner for the cgo Quartz backends.
+          - os: ubuntu-latest
+            name: linux-windows
+            targets: linux-amd64 linux-arm64 windows-amd64 windows-arm64
+          - os: macos-latest
+            name: darwin
+            targets: darwin-amd64 darwin-arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27"
+      - run: scripts/build.sh dist ${{ matrix.targets }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sshdesk-${{ matrix.name }}
+          path: dist/
