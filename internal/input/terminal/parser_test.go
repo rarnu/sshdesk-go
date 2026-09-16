@@ -121,6 +121,32 @@ func TestSGRMouse(t *testing.T) {
 	}
 }
 
+func TestSGRMouseNegativePixelCoordinates(t *testing.T) {
+	parser := &Parser{}
+	events := feed(t, parser, []byte("\x1b[<35;1244;-7M\x1b[<35;1245;-14M"), 1.0)
+	want := []input.Event{
+		input.MouseMoveEvent{Column: 1243, Row: 0},
+		input.MouseMoveEvent{Column: 1244, Row: 0},
+	}
+	if len(events) != len(want) {
+		t.Fatalf("got %#v", events)
+	}
+	for i := range want {
+		if events[i] != want[i] {
+			t.Errorf("event %d: got %#v, want %#v", i, events[i], want[i])
+		}
+	}
+}
+
+func TestMalformedSGRMouseIsSwallowed(t *testing.T) {
+	parser := &Parser{}
+	events := feed(t, parser, []byte("\x1b[<1;2;3;4Mx"), 1.0)
+	keys := keyEvents(t, events)
+	if len(keys) != 1 || keys[0].Unicode != 'x' {
+		t.Fatalf("got %#v, want only the literal x keystroke", events)
+	}
+}
+
 func TestConsecutiveMouseMovesAreCoalescedWithoutLosingClicks(t *testing.T) {
 	click := input.MouseButtonEvent{Button: 1, Pressed: true, Column: 30, Row: 15}
 	events := []input.Event{

@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	mouseRe        = regexp.MustCompile(`^\x1b\[<(\d{1,5});(\d{1,5});(\d{1,5})([Mm])`)
+	mouseRe        = regexp.MustCompile(`^\x1b\[<(\d{1,5});(-?\d{1,5});(-?\d{1,5})([Mm])`)
 	csiKeyRe       = regexp.MustCompile(`^\x1b\[(?:(\d+)(?:;(\d+))?)?([A-DFHZ])`)
 	csiTildeRe     = regexp.MustCompile(`^\x1b\[(\d+)(?:;(\d+))?~`)
 	cursorReportRe = regexp.MustCompile(`^\x1b\[(\d{1,4});(\d{1,4})R`)
@@ -259,6 +259,24 @@ func (p *Parser) Feed(data []byte, now float64) ([]input.Event, error) {
 				}
 				p.hasEscape = false
 				continue
+			}
+			if hasPrefix(p.buffer, "\x1b[<") {
+				swallowed := false
+				for i := 2; i < len(p.buffer); i++ {
+					if p.buffer[i] >= 0x40 && p.buffer[i] <= 0x7E {
+						// mouseRe already failed: malformed SGR mouse
+						// report with a final byte present. Swallow the
+						// whole sequence instead of leaking its bytes
+						// into the remote session as keystrokes.
+						p.buffer = p.buffer[i+1:]
+						p.hasEscape = false
+						swallowed = true
+						break
+					}
+				}
+				if swallowed {
+					continue
+				}
 			}
 			if hasPrefix(p.buffer, string(legacyMousePrefix)) {
 				if len(p.buffer) < 6 {
